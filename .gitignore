@@ -24,6 +24,9 @@
 # Backup of previous nested git repo (should never be committed)
 **/.git.backup-*/
 
+# Legacy folder from previous layout (safe to delete locally)
+Floorball Portalen/
+
 # Env files
 **/.env*
 
