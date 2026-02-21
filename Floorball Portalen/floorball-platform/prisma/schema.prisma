@@ -1,0 +1,873 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum GlobalRole {
+  ADMIN
+  SUPERUSER
+  USER
+}
+
+enum TeamRole {
+  LEADER
+  PLAYER
+  SUPPORTER
+}
+
+enum ApprovalStatus {
+  PENDING_ADMIN
+  PENDING_LEADER
+  APPROVED
+  REJECTED
+}
+
+enum Gender {
+  MEN
+  WOMEN
+}
+
+enum AgeGroup {
+  OLDIES
+  SENIOR
+  U21
+  U19
+  U17
+  U15
+  U13
+  U12
+  U11
+  U10
+  U9
+  U8
+  U7
+  U5
+}
+
+model CompetitionSeason {
+  id        String   @id @default(cuid())
+  startYear Int      @unique
+  label     String
+  isCurrent Boolean  @default(false)
+
+  rows      CompetitionRow[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model CompetitionRow {
+  id        String   @id @default(cuid())
+  raekkeId  Int      @unique
+  name      String
+
+  gender    Gender
+  ageGroup  AgeGroup
+
+  seasonId  String
+  season    CompetitionSeason @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+
+  pools     CompetitionPool[]
+  users     User[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([gender, ageGroup, seasonId])
+}
+
+model CompetitionPool {
+  id       String @id @default(cuid())
+  puljeId  Int    @unique
+  name     String
+
+  rowId    String
+  row      CompetitionRow @relation(fields: [rowId], references: [id], onDelete: Cascade)
+
+  teams    CompetitionPoolTeam[]
+  matches  CompetitionMatch[]
+  users    User[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([rowId])
+}
+
+model CompetitionPoolTeam {
+  id       String @id @default(cuid())
+
+  poolId   String
+  pool     CompetitionPool @relation(fields: [poolId], references: [id], onDelete: Cascade)
+
+  name     String
+  rank     Int?
+  played   Int?
+  wins     Int?
+  draws    Int?
+  losses   Int?
+  goalsFor Int?
+  goalsAgainst Int?
+  points   Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([poolId, name])
+  @@index([poolId, rank])
+}
+
+model CompetitionMatch {
+  id      String @id @default(cuid())
+
+  kampId  Int    @unique
+  matchNo Int?
+
+  poolId  String
+  pool    CompetitionPool @relation(fields: [poolId], references: [id], onDelete: Cascade)
+
+  startAt DateTime?
+  venue   String?
+
+  homeTeam String
+  awayTeam String
+  homeScore Int?
+  awayScore Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([poolId, startAt])
+}
+
+enum MatchProtocolSide {
+  HOME
+  AWAY
+}
+
+model MatchProtocolPlayer {
+  id       String @id @default(cuid())
+
+  kampId   Int
+  side     MatchProtocolSide
+  rowIndex Int
+
+  role     String?
+  number   String?
+  name     String?
+  born     String?
+
+  reserve  String?
+  leader   String?
+
+  // Match status replicated per row: open | live | closed
+  status   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([kampId, side, rowIndex])
+  @@index([kampId, side])
+}
+
+model MatchProtocolEvent {
+  id       String @id @default(cuid())
+
+  kampId   Int
+  rowIndex Int
+
+  period   String?
+  time     String?
+  side     String?
+  number   String?
+  goal     String?
+  assist   String?
+  penalty  String?
+  code     String?
+
+  // Match status replicated per row: open | live | closed
+  status   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([kampId, rowIndex])
+  @@index([kampId])
+}
+
+model MatchUploadLineup {
+  id       String @id @default(cuid())
+
+  kampId   Int
+  rowIndex Int
+
+  date     DateTime?
+  liga     String
+  pulje    String
+  venue    String
+
+  cG       String?
+  number   String?
+  name     String?
+  birthday String?
+
+  reserve  String?
+  leader   String?
+
+  // Match status replicated per row: open | live | closed
+  status   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([kampId, venue, rowIndex])
+  @@index([kampId])
+}
+
+model MatchLineupApproval {
+  id           String   @id @default(cuid())
+
+  kampId       Int
+  venue        String
+
+  leaderName   String
+  signaturePng Bytes
+
+  approvedById String?
+  approvedBy   TaUser?  @relation("MatchLineupApprovalApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
+
+  approvedAt   DateTime @default(now())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([kampId, venue])
+  @@index([kampId])
+}
+
+model MatchStart {
+  id          String   @id @default(cuid())
+
+  kampId      Int      @unique
+  startedAt   DateTime @default(now())
+
+  startedById String?
+  startedBy   TaUser?  @relation("MatchStartStartedBy", fields: [startedById], references: [id], onDelete: SetNull)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([kampId])
+}
+
+model MatchRefereeApproval {
+  id           String   @id @default(cuid())
+
+  kampId       Int
+  refIndex     Int
+
+  name         String
+  refereeNo    String
+  signaturePng Bytes
+
+  // When true, referee 2 is not present and ref2 approval is not required.
+  noRef2       Boolean  @default(false)
+
+  approvedAt   DateTime @default(now())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([kampId, refIndex])
+  @@index([kampId])
+}
+
+model MatchUploadEvent {
+  id       String @id @default(cuid())
+
+  kampId   Int
+  rowIndex Int
+
+  date     DateTime?
+  liga     String
+  pulje    String
+  venue    String
+
+  period   String?
+  time     String?
+  player1  String?
+  player2  String?
+  score    String?
+  event    String?
+  pim      String?
+  code     String?
+
+  // Match status replicated per row: open | live | closed
+  status   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([kampId, rowIndex])
+  @@index([kampId])
+}
+
+enum TeamColor {
+  RED
+  WHITE
+  BLACK
+  BLUE
+  GREEN
+}
+
+enum StatsFileKind {
+  EVENTS
+  PLAYERS
+}
+
+enum JsonDocumentScope {
+  TEAM
+  PUBLIC
+}
+
+enum JsonDocumentKind {
+  PLAYBOOK
+  EXERCISE
+}
+
+enum TestType {
+  BEEP
+}
+
+model League {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  teams     Team[]
+  users     User[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Team {
+  id        String   @id @default(cuid())
+  leagueId  String
+  league    League   @relation(fields: [leagueId], references: [id], onDelete: Restrict)
+  name      String
+  logoUrl   String?
+  themePrimary   TeamColor @default(RED)
+  themeSecondary TeamColor @default(WHITE)
+  users     User[]
+  memberships TeamMembership[]
+  statsFiles StatsFile[]
+  statsEvents StatsEvent[]
+  statsPlayers StatsPlayer[]
+  matches   Match[]
+  jsonDocuments JsonDocument[]
+  tests     TeamTest[]
+  readinessEntries TeamReadinessEntry[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([leagueId, name])
+}
+
+model TeamReadinessEntry {
+  id        String   @id @default(cuid())
+
+  teamId    String
+  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Date-only represented as a DateTime (stored in UTC).
+  entryDate DateTime
+
+  fatigue       Int
+  sleepQuality  Int
+  sleepDuration Int
+  soreness      Int
+  mood          Int
+  stress        Int
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([teamId, userId, entryDate])
+  @@index([teamId, entryDate])
+  @@index([userId, entryDate])
+}
+
+model Match {
+  id        String   @id @default(cuid())
+  teamId    String
+  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  title     String
+  videoUrl  String
+
+  matchDate DateTime
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([teamId, matchDate])
+  @@index([teamId, createdAt])
+}
+
+model JsonDocument {
+  id        String   @id @default(cuid())
+
+  scope     JsonDocumentScope
+  kind      JsonDocumentKind
+
+  teamId    String?
+  team      Team?    @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  title     String
+  content   String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([scope, kind, createdAt])
+  @@index([teamId, kind, createdAt])
+}
+
+model TeamTest {
+  id        String   @id @default(cuid())
+
+  teamId    String
+  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  type      TestType
+  testDate  DateTime
+
+  results   TeamTestResult[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([teamId, testDate])
+  @@index([teamId, createdAt])
+}
+
+model TeamTestResult {
+  id        String   @id @default(cuid())
+
+  testId    String
+  test      TeamTest @relation(fields: [testId], references: [id], onDelete: Cascade)
+
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Used when the participant is not a registered member/user.
+  externalName String?
+
+  resultText String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([testId, userId])
+  @@unique([testId, externalName])
+  @@index([testId, createdAt])
+}
+
+model User {
+  id           String         @id @default(cuid())
+  globalRole   GlobalRole     @default(USER)
+
+  superuserStatus ApprovalStatus @default(APPROVED)
+
+  leagueId     String
+  league       League          @relation(fields: [leagueId], references: [id], onDelete: Restrict)
+
+  teamId       String?
+  team         Team?           @relation(fields: [teamId], references: [id], onDelete: SetNull)
+
+  email        String         @unique
+  username     String         @unique
+  passwordHash String
+
+  name         String?
+  imageUrl     String?
+
+  gender       Gender         @default(MEN)
+  ageGroup     AgeGroup       @default(SENIOR)
+
+  competitionRowId  String?
+  competitionRow    CompetitionRow? @relation(fields: [competitionRowId], references: [id], onDelete: SetNull)
+
+  competitionPoolId String?
+  competitionPool   CompetitionPool? @relation(fields: [competitionPoolId], references: [id], onDelete: SetNull)
+
+  competitionTeamName String?
+
+  position     String?
+  birthDate    DateTime?
+  phoneNumber  String?
+
+  approvedById String?
+  approvedBy   User?          @relation("UserApprovals", fields: [approvedById], references: [id], onDelete: SetNull)
+  approvals    User[]         @relation("UserApprovals")
+  approvedAt   DateTime?
+
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  memberships  TeamMembership[]
+
+  approvedMemberships TeamMembership[] @relation("MembershipApprovals")
+
+  uploadedStatsFiles StatsFile[] @relation("StatsFileUploader")
+
+  testResults TeamTestResult[]
+  readinessEntries TeamReadinessEntry[]
+}
+
+model TeamMembership {
+  id           String         @id @default(cuid())
+  userId       String
+  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  teamId       String
+  team         Team           @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  role         TeamRole
+  status       ApprovalStatus
+
+  approvedById String?
+  approvedBy   User?          @relation("MembershipApprovals", fields: [approvedById], references: [id], onDelete: SetNull)
+  approvedAt   DateTime?
+
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  @@unique([userId, teamId])
+  @@index([teamId, role, status])
+}
+
+model StatsFile {
+  id           String        @id @default(cuid())
+  teamId       String
+  team         Team          @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  uploadedById String
+  uploadedBy   User          @relation("StatsFileUploader", fields: [uploadedById], references: [id], onDelete: Cascade)
+
+  kind         StatsFileKind
+  originalName String
+  gameId       String?
+  gameDate     DateTime?
+  competition  String?
+
+  content      String
+  createdAt    DateTime      @default(now())
+
+  events       StatsEvent[]  @relation("StatsFileEvents")
+  players      StatsPlayer[] @relation("StatsFilePlayers")
+
+  @@index([teamId, kind, createdAt])
+  @@index([teamId, gameId])
+}
+
+model StatsEvent {
+  id          String     @id @default(cuid())
+  teamId      String
+  team        Team       @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  fileId      String
+  file        StatsFile  @relation("StatsFileEvents", fields: [fileId], references: [id], onDelete: Cascade)
+
+  rowId       Int?
+  timestamp   DateTime?
+  event       String
+  teamName    String?
+  venue       String?
+  teamHome    String?
+  teamAway    String?
+  period      Int?
+  perspective String?
+  strength    String?
+
+  p1No        Int?
+  p1Name      String?
+  p2No        Int?
+  p2Name      String?
+  gNo         Int?
+  goalieName  String?
+
+  homeLine    String?
+  homePlayers String?
+  homePlayersNames String?
+  awayLine    String?
+  awayPlayers String?
+  awayPlayersNames String?
+
+  xM          Float?
+  yM          Float?
+
+  gameId      String?
+  gameDate    DateTime?
+  competition String?
+  videoUrl    String?
+  videoTime   Int?
+  aimX        Float?
+  aimY        Float?
+
+  createdAt   DateTime @default(now())
+
+  @@index([teamId, createdAt])
+  @@index([teamId, gameId])
+}
+
+model StatsPlayer {
+  id          String     @id @default(cuid())
+  teamId      String
+  team        Team       @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  fileId      String
+  file        StatsFile  @relation("StatsFilePlayers", fields: [fileId], references: [id], onDelete: Cascade)
+
+  number      Int?
+  name        String?
+  line        String?
+  venue       String?
+  teamName    String?
+  teamColor   String?
+  gameId      String?
+  gameDate    DateTime?
+  competition String?
+
+  createdAt   DateTime @default(now())
+
+  @@index([teamId, createdAt])
+  @@index([teamId, gameId])
+}
+
+// ----------------------------
+// Turneringsadministration auth
+// ----------------------------
+// NOTE: These tables are intentionally separate from the old app's `User` table.
+// Only match protocol / lineup data is meant to be shared across apps.
+
+enum TaRole {
+  ADMIN
+  TOURNAMENT_ADMIN
+  REF_ADMIN
+  CLUB_LEADER
+  TEAM_LEADER
+  SECRETARIAT
+  REFEREE
+}
+
+enum TaRoleStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model TaUser {
+  id           String   @id @default(cuid())
+
+  email        String   @unique
+  username     String   @unique
+  passwordHash String
+
+  name         String?
+
+  roles        TaUserRole[]
+  approvedRoles TaUserRole[] @relation("TaUserRoleApprovals")
+
+  createdRosters TaRoster[]
+
+  lineupApprovalsApprovedBy MatchLineupApproval[] @relation("MatchLineupApprovalApprovedBy")
+  matchesStarted           MatchStart[]          @relation("MatchStartStartedBy")
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("ta_users")
+}
+
+model TaUserRole {
+  id           String       @id @default(cuid())
+
+  userId       String
+  user         TaUser       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  role         TaRole
+  status       TaRoleStatus @default(PENDING)
+
+  // Optional metadata for leader roles (used during signup)
+  clubId       String?
+  club         TaClub?      @relation(fields: [clubId], references: [id], onDelete: SetNull)
+
+  teamId       String?
+  team         TaTeam?      @relation(fields: [teamId], references: [id], onDelete: SetNull)
+
+  // Stable team identifier from Turnering Excel (Holdliste.HoldID)
+  holdId       String?
+
+  // Role scoping key to allow multiple roles of the same type (e.g. TEAM_LEADER for multiple teams).
+  // Examples: "GLOBAL", "club:<clubId>", "team:<teamId>"
+  scopeKey     String       @default("GLOBAL")
+
+  approvedById String?
+  approvedBy   TaUser?      @relation("TaUserRoleApprovals", fields: [approvedById], references: [id], onDelete: SetNull)
+  approvedAt   DateTime?
+
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  @@unique([userId, role, scopeKey])
+  @@index([role, status, createdAt])
+  @@index([holdId])
+  @@map("ta_user_roles")
+}
+
+// ----------------------------
+// Turneringsadministration data
+// ----------------------------
+
+model TaClub {
+  id        String   @id @default(cuid())
+  clubNo    String?  @unique
+  name      String   @unique
+
+  teams     TaTeam[]
+  roles     TaUserRole[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("ta_clubs")
+}
+
+model TaTeam {
+  id        String   @id @default(cuid())
+
+  clubId    String
+  club      TaClub   @relation(fields: [clubId], references: [id], onDelete: Cascade)
+
+  league    String
+  gender    String?
+  name      String
+
+  holdId    String?
+  seasonStartYear Int?
+
+  roles     TaUserRole[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([clubId, league, gender, name])
+  @@index([clubId, league])
+  @@index([holdId])
+  @@map("ta_teams")
+}
+
+model TaRoster {
+  id         String   @id @default(cuid())
+
+  // Stable team identifier from Turnering Excel (Holdliste.HoldID)
+  holdId     String?
+
+  // NOTE: Not a foreign key. Teams are overwritten on publish; rosters must survive.
+  teamId     String
+
+  // Snapshots (explicit requirement: each trup has Liga + Hold)
+  league     String
+  teamName   String
+
+  createdById String?
+  createdBy   TaUser? @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  players    TaRosterPlayer[]
+  leaders    TaRosterLeader[]
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([holdId])
+  @@index([teamId])
+  @@index([holdId])
+  @@map("ta_rosters")
+}
+
+model TaRosterPlayer {
+  id        String   @id @default(cuid())
+
+  rosterId  String
+  roster    TaRoster @relation(fields: [rosterId], references: [id], onDelete: Cascade)
+
+  rowIndex  Int
+  number    String?
+  name      String
+  birthDate DateTime? @db.Date
+  imageUrl  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([rosterId, rowIndex])
+  @@index([rosterId])
+  @@map("ta_roster_players")
+}
+
+model TaRosterLeader {
+  id        String   @id @default(cuid())
+
+  rosterId  String
+  roster    TaRoster @relation(fields: [rosterId], references: [id], onDelete: Cascade)
+
+  rowIndex  Int
+  name      String
+  imageUrl  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([rosterId, rowIndex])
+  @@index([rosterId])
+  @@map("ta_roster_leaders")
+}
+
+model TaMatch {
+  id        String   @id @default(cuid())
+
+  externalId String?
+
+  date      DateTime? @db.Date
+  time      DateTime? @db.Time(0)
+
+  venue     String?
+  result    String?
+  dommer1   String?
+  dommer1Id String?
+  dommer2   String?
+  dommer2Id String?
+  gender    String?
+  league    String?
+  stage     String?
+  pool      String?
+
+  homeTeam  String
+  homeHoldId String?
+  awayTeam  String
+  awayHoldId String?
+
+  sourceImportId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([date, time])
+  @@map("ta_matches")
+}

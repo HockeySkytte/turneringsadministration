@@ -1,0 +1,29 @@
+# Root gitignore for turneringsadministration
+
+# Python virtual environments
+.venv/
+
+# Node/Next common
+**/node_modules/
+**/.next/
+**/out/
+**/build/
+
+# Backup of previous nested git repo (should never be committed)
+**/.git.backup-*/
+
+# Env files
+**/.env*
+
+# Logs
+**/*.log
+
+# OS/editor
+.DS_Store
+Thumbs.db
+
+# TypeScript
+**/*.tsbuildinfo
+
+# Prisma generated artifacts
+**/src/generated/prisma/

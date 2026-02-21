@@ -1,0 +1,489 @@
+* { box-sizing: border-box; }
+:root {
+  --bg: #0b1020;
+  --panel: #11192f;
+  --panel-2: #0f1630;
+  --text: #e6e8ee;
+  --muted: #aab1c6;
+  --accent: #5fb0ff;
+  --warn: #ff7676;
+  --grid: #2a3454;
+  --line: #5a6aa3;
+  --rink: #0a1a3a;
+  --goal: #ff3b3b;
+  --shot: #ffcc66;
+}
+html, body {
+  height: 100%;
+}
+body {
+  margin: 0;
+  font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+  /* Reverse vertical direction and keep it stable during scroll */
+  background: inherit;
+  background-attachment: fixed;
+  color: var(--text);
+  /* Prevent layout width jumps when vertical scrollbar appears */
+  overflow-y: scroll;
+}
+/* Reserve scrollbar gutter to further reduce layout shifts */
+html {
+  /* Ensure no white gutters on sides; let only the right gutter reserve space */
+  scrollbar-gutter: stable;
+  /* Extend background to the root element to cover any reserved gutter area */
+  background: linear-gradient(180deg, #060914 0%, #0e1630 60%);
+  background-attachment: fixed;
+}
+.app-header, .app-footer {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 12px 8px;
+}
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 16px;
+}
+.top-nav { display: flex; gap: 10px; align-items: center; }
+.nav-link {
+  display: inline-block;
+  padding: 6px 10px;
+  border: 1px solid #24315b;
+  border-radius: 8px;
+  color: var(--text);
+  background: linear-gradient(180deg, #131b36, #101732);
+  text-decoration: none;
+  font-size: 13px;
+}
+.nav-link:hover { filter: brightness(1.1); }
+.nav-link.active { border-color: #4a6bff; box-shadow: inset 0 0 0 1px #4a6bff66; }
+.app-header h1 {
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  margin: 0 0 0 2px; /* subtle indent */
+}
+.controls-row { display: flex; gap: 8px; margin-left: auto; }
+.btn {
+  background: linear-gradient(180deg, #1a2448, #132047);
+  color: var(--text);
+  border: 1px solid #2a3a6a;
+  border-radius: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1.2;
+}
+.btn:hover { filter: brightness(1.1); }
+.btn:active { transform: translateY(1px); }
+.btn-warn { background: linear-gradient(180deg, #3a1620, #2a0f15); border-color: #6a2a3a; color: #ffd3d3; }
+
+.app-main {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0 8px 24px;
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  grid-template-rows: auto auto;
+  grid-auto-flow: row;
+  gap: 16px;
+}
+.rink-card, .table-card, .panel-card {
+  background: linear-gradient(180deg, var(--panel), var(--panel-2));
+  border: 1px solid #1b254a;
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+}
+.report-card { overflow: hidden; }
+.legend-row { display: flex; gap: 16px; padding: 10px 12px; align-items: center; border-bottom: 1px solid #1b254a; }
+.legend-item { display: inline-flex; align-items: center; gap: 8px; }
+.legend-swatch { width: 16px; height: 16px; border-radius: 4px; border: 1px solid #22325a; display: inline-block; }
+.legend-label { font-size: 13px; color: var(--text); opacity: 0.9; }
+.table-card { grid-column: 1 / -1; }
+.video-controls { display: flex; gap: 10px; align-items: center; padding: 10px 12px; border-bottom: 1px solid #1a2a50; }
+.video-toggle { display: inline-flex; gap: 8px; align-items: center; color: var(--text); }
+.video-url { flex: 1; min-width: 280px; background: #0f1630; color: var(--text); border: 1px solid #24315b; border-radius: 8px; padding: 8px 10px; }
+.video-wrap { padding: 10px 12px; border-bottom: 1px solid #1a2a50; }
+.video-frame { width: 100%; max-width: 100%; height: auto; aspect-ratio: 16 / 9; border: none; border-radius: 8px; background: #000; }
+.video-html5 { width: 100%; max-width: 100%; height: auto; aspect-ratio: 16 / 9; border: none; border-radius: 8px; background: #000; }
+.video-frame iframe { width: 100%; height: 100%; border: 0; display: block; }
+/* Ensure the dynamically created YouTube player fills its container */
+#gameVideoFrame { width: 100%; aspect-ratio: 16 / 9; border-radius: 8px; overflow: hidden; background: #000; }
+#gameVideoFrame iframe { width: 100%; height: 100%; border: 0; display: block; }
+.video-attach { display: flex; gap: 10px; align-items: end; padding: 10px 12px; border-bottom: 1px solid #1a2a50; }
+/* Shot Aim styles */
+.aim-controls { display: flex; gap: 10px; align-items: center; padding: 10px 12px; border-bottom: 1px solid #1a2a50; }
+.aim-toggle { display: inline-flex; gap: 8px; align-items: center; color: var(--text); }
+.aim-wrap { padding: 10px 12px; border-bottom: 1px solid #1a2a50; position: relative; }
+.aim-box { position: relative; width: 100%; display: flex; justify-content: center; align-items: center; }
+.aim-img { width: 100%; max-width: 640px; height: auto; border-radius: 8px; border: 1px solid #24315b; display: block; background: #000; margin: 0 auto; }
+.aim-canvas { position: absolute; pointer-events: auto; left: 0; top: 0; width: 0; height: 0; }
+.aim-attach { display: flex; gap: 10px; align-items: end; padding: 10px 12px; border-bottom: 1px solid #1a2a50; }
+.details-controls { margin: 12px 0 8px; display: grid; gap: 8px; padding: 0 8px; }
+.details-attach { display: none; align-items: flex-end; gap: 8px; }
+.aside-actions { margin: 12px 0 8px; display: grid; gap: 8px; padding: 0 8px; }
+.panel-card { align-self: start; height: fit-content; }
+.panel-title { margin: 0 0 10px; font-size: 18px; font-weight: 600; padding-left: 6px; }
+.meta-form { display: grid; gap: 10px; }
+.fld-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.fldset { border: 1px solid #1b254a; border-radius: 8px; padding: 8px 10px; }
+.fldset legend { color: var(--muted); font-size: 12px; padding: 0 6px; }
+.fld { display: grid; gap: 6px; }
+.fldset .fld-row-2 { grid-template-columns: 1fr 1fr; gap: 12px; }
+.fld span { color: var(--muted); font-size: 12px; }
+.fld input, .fld select {
+  background: #0f1630;
+  color: var(--text);
+  border: 1px solid #24315b;
+  border-radius: 8px;
+  padding: 8px 10px;
+  width: 100%;
+  /* Force left alignment for values in inputs/selects */
+  text-align: left;
+}
+/* Left-align the selected value and the dropdown options across browsers */
+select, .fld select { text-align: left; text-align-last: left; }
+select option { text-align: left; }
+/* Force slicer values to be 14px and white - target visible selects only */
+.fld select:not([style*="display:none"]):not([style*="display: none"]) {
+  font-size: 14px !important;
+  color: #ffffff !important;
+  /* Override any system/UA styles */
+  -webkit-text-fill-color: #ffffff !important;
+  text-shadow: none !important;
+}
+
+/* For the custom multi-select trigger text */
+.multi-trigger span:first-child {
+  font-size: 14px !important;
+  color: #ffffff !important;
+}
+/* Also bump option font-size in dropdowns where the UA honors it */
+select option { font-size: 14px; }
+/* Number inputs can be right-aligned by some UAs; keep them left */
+input[type="number"] { text-align: left; }
+/* Ensure checkbox label groups are left-justified */
+.video-toggle, .aim-toggle, .vc-right { justify-content: flex-start; }
+/* Standardize select appearance like the Perspective slicer: left-aligned value and consistent arrow */
+.fld select {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  /* Keep LTR and left-aligned even in native dropdowns where possible */
+  direction: ltr;
+  text-align-last: left;
+  /* Add a subtle chevron on the right; encoded SVG for portability */
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23aab1c6' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 12px 12px;
+  padding-right: 28px; /* leave space for the chevron */
+}
+/* Left-align option text inside dropdown lists on engines that honor it */
+select option { direction: ltr; text-align: left; }
+/* Any label that directly contains a checkbox should lay out left-to-right and left-justify content */
+label:has(> input[type="checkbox"]) {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: flex-start;
+}
+.rink-wrapper {
+  position: relative;
+  width: 100%;
+  /* Default rink aspect (40m x 20m) for general pages like Shotplotter */
+  aspect-ratio: 2 / 1;
+  background: radial-gradient(100% 120% at 10% 10%, #0b1a3a, #06112a 70%);
+  border-radius: 12px;
+  overflow: hidden;
+  pointer-events: none; /* pass events to canvas */
+  /* Internal symmetric padding so the shot map has same left/right spacing */
+  padding: 12px;
+}
+/* On the Report page we size height via JS to keep each half square; disable the default aspect-ratio */
+.report-rink { aspect-ratio: auto; }
+#reportRink, #heatRink { pointer-events: auto; }
+.kpi-center {
+  position: absolute;
+  inset: 12px; /* match wrapper padding for alignment */
+  display: grid;
+  grid-template-columns: 1fr 240px 1fr; /* center column equals JS gutter */
+  pointer-events: none; /* KPIs overlay only, not intercepting canvas interactions */
+}
+.kpi-center::before {
+  content: '';
+  grid-column: 2;
+}
+.kpi-stack { display: grid; gap: 10px; grid-column: 2; align-self: center; justify-self: center; max-height: 100%; overflow: auto; padding-right: 2px; }
+.kpi-card {
+  width: 220px;
+  background: linear-gradient(180deg, #121a34, #0f1630);
+  border: 1px solid #1a2a50;
+  border-radius: 12px;
+  padding: 10px;
+  box-shadow: 0 6px 16px rgba(0,0,0,0.4);
+}
+.kpi-title { text-align: center; font-weight: 600; margin: 2px 0 6px; letter-spacing: 0.2px; }
+.kpi-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+.kpi-item { display: grid; grid-template-rows: auto auto; gap: 4px; text-align: center; }
+.kpi-name { color: var(--muted); font-size: 12px; }
+.kpi-value { font-variant-numeric: tabular-nums; font-weight: 600; padding: 4px 6px; border: 1px solid #1a2a50; border-radius: 6px; background: #0e1733; color: var(--text); }
+#shotsTable { max-width: 100%; }
+.rink-card { overflow: hidden; }
+.rink-card .hint { margin-top: 8px; }
+#rink {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: auto; /* canvas should handle clicks */
+}
+#reportRink {
+  position: absolute;
+  /* Fill the padded content box of the wrapper */
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: auto;
+}
+#heatRink {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: auto;
+}
+.legend-center { justify-content: center; }
+.ends-row { display: grid; grid-template-columns: 1fr 1fr; padding: 6px 8px 0; color: var(--muted); font-size: 18px; letter-spacing: 0.2px; font-weight: 600; }
+.ends-row .left { text-align: left; }
+.ends-row .right { text-align: right; }
+
+/* Multi-select dropdown (custom) */
+.multi-select { position: relative; }
+.multi-trigger { 
+  display: inline-flex; align-items: center; justify-content: space-between; gap: 8px;
+  width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid #24315b;
+  background: #0f1630; color: #fff; cursor: pointer; font: inherit; text-align: left; font-size: 14px;
+}
+.multi-trigger .chev {
+  margin-left: auto;
+  opacity: 0.8;
+  /* Use the exact same SVG chevron as native selects */
+  width: 12px; height: 12px; flex: 0 0 12px;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23aab1c6' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 12px 12px;
+  /* Hide the fallback ▾ text so only the SVG shows */
+  font-size: 0;
+}
+.multi-panel {
+  position: fixed; /* Allow to escape parent container */
+  z-index: 1000; /* High z-index to appear above everything */
+  min-width: 280px; max-width: 400px; max-height: 50vh; overflow: auto;
+  padding: 10px; border: 1px solid #1a2a50; border-radius: 10px;
+  background: linear-gradient(180deg, #121a34, #0f1630);
+  box-shadow: 0 10px 30px rgba(0,0,0,0.45);
+  /* Position will be set via JS */
+}
+.multi-header { display: flex; justify-content: flex-start; align-items: center; margin-bottom: 6px; }
+.multi-clear { background: linear-gradient(180deg, #1a2448, #132047); color: var(--text); border: 1px solid #2a3a6a; border-radius: 999px; padding: 6px 10px; cursor: pointer; font-size: 12px; }
+.multi-list { display: grid; gap: 6px; }
+.multi-item { display: grid; grid-template-columns: 20px 1fr; gap: 10px; align-items: center; }
+.multi-item input[type="checkbox"] { width: 16px; height: 16px; }
+.multi-item label { text-align: left; color: var(--text); opacity: 0.95; font-size: 14px; }
+
+/* Tabs */
+.tabbar { display: flex; gap: 8px; padding: 8px 12px; border-bottom: 1px solid #1a2a50; }
+.tab-btn { background: linear-gradient(180deg, #1a2448, #132047); color: var(--text); border: 1px solid #2a3a6a; border-radius: 10px; padding: 8px 12px; cursor: pointer; font-size: 14px; line-height: 1.1; }
+.tab-btn.active { border-color: #4a6bff; box-shadow: inset 0 0 0 1px #4a6bff66; }
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+/* Heat map legend can reuse legend-row; canvas styling inline. */
+.hint { color: var(--muted); margin: 8px 4px 0; font-size: 12px; }
+
+/* Video + Events Table layout */
+.video-layout {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+@media (min-width: 900px) {
+  .video-layout {
+    grid-template-columns: 3fr 2fr; /* video larger than table */
+    align-items: start;
+  }
+}
+/* Explicit columns for clarity */
+.video-left, .video-right { min-width: 0; }
+/* Ensure the video scales nicely */
+#gameVideo {
+  width: 100%;
+  height: auto;
+  border-radius: 8px;
+  border: 1px solid #1a2a50;
+  background: #000;
+}
+/* Video controls bar */
+.video-controls-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid #1a2a50;
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: linear-gradient(180deg, #121a34, #0f1630);
+}
+.video-controls-bar .vc-left { display: inline-flex; gap: 8px; align-items: center; }
+.video-controls-bar .vc-right { display: inline-flex; gap: 8px; align-items: center; color: var(--text); }
+/* Events table styling */
+#eventsTable {
+  height: 100%;
+}
+#eventsTable table.events-table {
+  width: 100%;
+  border-collapse: separate;
+  border: 1px solid #1a2a50;
+  border-radius: 8px;
+  overflow: hidden;
+}
+#eventsTable thead { background: #142048; position: sticky; top: 0; z-index: 1; }
+#eventsTable th, #eventsTable td { padding: 8px 10px; border-bottom: 1px solid #1a2a50; text-align: left; font-variant-numeric: tabular-nums; white-space: nowrap; }
+#eventsTable tbody tr:hover { background: rgba(95,176,255,0.10); }
+#eventsTable tbody tr.playing { background: rgba(95,176,255,0.22); }
+/* Make the table pane scroll and match apparent height with the video */
+@media (min-width: 900px) {
+  #panelVideo .video-layout { grid-auto-rows: 1fr; }
+  #panelVideo .video-right #eventsTable { max-height: 60vh; overflow: auto; }
+}
+
+.table-scroll { overflow: auto; border-radius: 8px; border: 1px solid #1a2a50; max-height: 60vh; }
+#shotsTable { width: max-content; min-width: 100%; border-collapse: separate; table-layout: auto; }
+#shotsTable thead { background: #142048; position: sticky; top: 0; z-index: 1; }
+#shotsTable th, #shotsTable td { padding: 8px 10px; border-bottom: 1px solid #1a2a50; text-align: left; font-variant-numeric: tabular-nums; white-space: nowrap; }
+#shotsTable tbody tr:hover { background: rgba(255,255,255,0.03); }
+.row-btn { background: transparent; color: #ffdede; border: 1px solid #3a2a3a; padding: 4px 8px; border-radius: 6px; cursor: pointer; }
+
+.table-edit { width: 100%; background: transparent; border: 1px solid #2a3a6a; color: var(--text); border-radius: 6px; padding: 4px 6px; font: inherit; }
+
+.app-footer { color: var(--muted); font-size: 12px; opacity: 0.9; }
+
+/* Shots table column minimum widths, scoped per app to avoid index mismatch */
+/* HOCKEY (has P3 columns) */
+.app-hockey #shotsTable th:nth-child(1),  .app-hockey #shotsTable td:nth-child(1)  { min-width: 44px; }   /* # */
+.app-hockey #shotsTable th:nth-child(2),  .app-hockey #shotsTable td:nth-child(2)  { min-width: 270px; }  /* Time */
+.app-hockey #shotsTable th:nth-child(3),  .app-hockey #shotsTable td:nth-child(3)  { min-width: 108px; }  /* Event */
+.app-hockey #shotsTable th:nth-child(4),  .app-hockey #shotsTable td:nth-child(4)  { min-width: 160px; }  /* Team */
+.app-hockey #shotsTable th:nth-child(5),  .app-hockey #shotsTable td:nth-child(5)  { min-width: 96px; }   /* Venue */
+.app-hockey #shotsTable th:nth-child(6),  .app-hockey #shotsTable td:nth-child(6)  { min-width: 72px; }   /* Period */
+.app-hockey #shotsTable th:nth-child(7),  .app-hockey #shotsTable td:nth-child(7)  { min-width: 160px; }  /* Perspective */
+.app-hockey #shotsTable th:nth-child(8),  .app-hockey #shotsTable td:nth-child(8)  { min-width: 80px; }   /* Strength */
+.app-hockey #shotsTable th:nth-child(9),  .app-hockey #shotsTable td:nth-child(9)  { min-width: 80px; }   /* P1 No. */
+.app-hockey #shotsTable th:nth-child(10), .app-hockey #shotsTable td:nth-child(10) { min-width: 240px; }  /* P1 Name */
+.app-hockey #shotsTable th:nth-child(11), .app-hockey #shotsTable td:nth-child(11) { min-width: 80px; }   /* P2 No. */
+.app-hockey #shotsTable th:nth-child(12), .app-hockey #shotsTable td:nth-child(12) { min-width: 240px; }  /* P2 Name */
+.app-hockey #shotsTable th:nth-child(13), .app-hockey #shotsTable td:nth-child(13) { min-width: 80px; }   /* P3 No. */
+.app-hockey #shotsTable th:nth-child(14), .app-hockey #shotsTable td:nth-child(14) { min-width: 240px; }  /* P3 Name */
+.app-hockey #shotsTable th:nth-child(15), .app-hockey #shotsTable td:nth-child(15) { min-width: 96px; }   /* G No. */
+.app-hockey #shotsTable th:nth-child(16), .app-hockey #shotsTable td:nth-child(16) { min-width: 200px; }  /* Goalie Name */
+.app-hockey #shotsTable th:nth-child(17), .app-hockey #shotsTable td:nth-child(17) { min-width: 96px; }   /* Home Line */
+.app-hockey #shotsTable th:nth-child(18), .app-hockey #shotsTable td:nth-child(18) { min-width: 96px; }   /* Home Players No. */
+.app-hockey #shotsTable th:nth-child(19), .app-hockey #shotsTable td:nth-child(19) { min-width: 500px; }  /* Home Players (names) */
+.app-hockey #shotsTable th:nth-child(20), .app-hockey #shotsTable td:nth-child(20) { min-width: 96px; }   /* Away Line */
+.app-hockey #shotsTable th:nth-child(21), .app-hockey #shotsTable td:nth-child(21) { min-width: 96px; }   /* Away Players No. */
+.app-hockey #shotsTable th:nth-child(22), .app-hockey #shotsTable td:nth-child(22) { min-width: 500px; }  /* Away Players (names) */
+.app-hockey #shotsTable th:nth-child(23), .app-hockey #shotsTable td:nth-child(23) { min-width: 90px; }   /* X */
+.app-hockey #shotsTable th:nth-child(24), .app-hockey #shotsTable td:nth-child(24) { min-width: 90px; }   /* Y */
+.app-hockey #shotsTable th:nth-child(25), .app-hockey #shotsTable td:nth-child(25) { min-width: 110px; }  /* Shot Aim X */
+.app-hockey #shotsTable th:nth-child(26), .app-hockey #shotsTable td:nth-child(26) { min-width: 110px; }  /* Shot Aim Y */
+.app-hockey #shotsTable th:nth-child(27), .app-hockey #shotsTable td:nth-child(27) { min-width: 160px; }  /* Game ID */
+.app-hockey #shotsTable th:nth-child(28), .app-hockey #shotsTable td:nth-child(28) { min-width: 140px; }  /* Date */
+.app-hockey #shotsTable th:nth-child(29), .app-hockey #shotsTable td:nth-child(29) { min-width: 180px; }  /* Competition */
+.app-hockey #shotsTable th:nth-child(30), .app-hockey #shotsTable td:nth-child(30) { min-width: 140px; }  /* Season */
+.app-hockey #shotsTable th:nth-child(31), .app-hockey #shotsTable td:nth-child(31) { min-width: 180px; }  /* State */
+.app-hockey #shotsTable th:nth-child(32), .app-hockey #shotsTable td:nth-child(32) { min-width: 280px; }  /* Video URL */
+.app-hockey #shotsTable th:nth-child(33), .app-hockey #shotsTable td:nth-child(33) { min-width: 120px; }  /* Video Time */
+.app-hockey #shotsTable th:nth-child(34), .app-hockey #shotsTable td:nth-child(34) { min-width: 96px; }   /* Delete */
+
+/* FLOORBALL (no P3 columns) */
+.app-floorball #shotsTable th:nth-child(1),  .app-floorball #shotsTable td:nth-child(1)  { min-width: 44px; }   /* # */
+.app-floorball #shotsTable th:nth-child(2),  .app-floorball #shotsTable td:nth-child(2)  { min-width: 270px; }  /* Time */
+.app-floorball #shotsTable th:nth-child(3),  .app-floorball #shotsTable td:nth-child(3)  { min-width: 108px; }  /* Event */
+.app-floorball #shotsTable th:nth-child(4),  .app-floorball #shotsTable td:nth-child(4)  { min-width: 160px; }  /* Team */
+.app-floorball #shotsTable th:nth-child(5),  .app-floorball #shotsTable td:nth-child(5)  { min-width: 96px; }   /* Venue */
+.app-floorball #shotsTable th:nth-child(6),  .app-floorball #shotsTable td:nth-child(6)  { min-width: 72px; }   /* Period */
+.app-floorball #shotsTable th:nth-child(7),  .app-floorball #shotsTable td:nth-child(7)  { min-width: 160px; }  /* Perspective */
+.app-floorball #shotsTable th:nth-child(8),  .app-floorball #shotsTable td:nth-child(8)  { min-width: 80px; }   /* Strength */
+.app-floorball #shotsTable th:nth-child(9),  .app-floorball #shotsTable td:nth-child(9)  { min-width: 80px; }   /* P1 No. */
+.app-floorball #shotsTable th:nth-child(10), .app-floorball #shotsTable td:nth-child(10) { min-width: 240px; }  /* P1 Name */
+.app-floorball #shotsTable th:nth-child(11), .app-floorball #shotsTable td:nth-child(11) { min-width: 80px; }   /* P2 No. */
+.app-floorball #shotsTable th:nth-child(12), .app-floorball #shotsTable td:nth-child(12) { min-width: 240px; }  /* P2 Name */
+.app-floorball #shotsTable th:nth-child(13), .app-floorball #shotsTable td:nth-child(13) { min-width: 96px; }   /* G No. */
+.app-floorball #shotsTable th:nth-child(14), .app-floorball #shotsTable td:nth-child(14) { min-width: 200px; }  /* Goalie Name */
+.app-floorball #shotsTable th:nth-child(15), .app-floorball #shotsTable td:nth-child(15) { min-width: 96px; }   /* Home Line */
+.app-floorball #shotsTable th:nth-child(16), .app-floorball #shotsTable td:nth-child(16) { min-width: 96px; }   /* Home Players No. */
+.app-floorball #shotsTable th:nth-child(17), .app-floorball #shotsTable td:nth-child(17) { min-width: 500px; }  /* Home Players (names) */
+.app-floorball #shotsTable th:nth-child(18), .app-floorball #shotsTable td:nth-child(18) { min-width: 96px; }   /* Away Line */
+.app-floorball #shotsTable th:nth-child(19), .app-floorball #shotsTable td:nth-child(19) { min-width: 96px; }   /* Away Players No. */
+.app-floorball #shotsTable th:nth-child(20), .app-floorball #shotsTable td:nth-child(20) { min-width: 500px; }  /* Away Players (names) */
+.app-floorball #shotsTable th:nth-child(21), .app-floorball #shotsTable td:nth-child(21) { min-width: 90px; }   /* X (m) */
+.app-floorball #shotsTable th:nth-child(22), .app-floorball #shotsTable td:nth-child(22) { min-width: 90px; }   /* Y (m) */
+.app-floorball #shotsTable th:nth-child(23), .app-floorball #shotsTable td:nth-child(23) { min-width: 110px; }  /* Shot Aim X */
+.app-floorball #shotsTable th:nth-child(24), .app-floorball #shotsTable td:nth-child(24) { min-width: 110px; }  /* Shot Aim Y */
+.app-floorball #shotsTable th:nth-child(25), .app-floorball #shotsTable td:nth-child(25) { min-width: 160px; }  /* Game ID */
+.app-floorball #shotsTable th:nth-child(26), .app-floorball #shotsTable td:nth-child(26) { min-width: 140px; }  /* Date */
+.app-floorball #shotsTable th:nth-child(27), .app-floorball #shotsTable td:nth-child(27) { min-width: 180px; }  /* Competition */
+.app-floorball #shotsTable th:nth-child(28), .app-floorball #shotsTable td:nth-child(28) { min-width: 280px; }  /* Video URL */
+.app-floorball #shotsTable th:nth-child(29), .app-floorball #shotsTable td:nth-child(29) { min-width: 120px; }  /* Video Time */
+.app-floorball #shotsTable th:nth-child(30), .app-floorball #shotsTable td:nth-child(30) { min-width: 96px; }   /* Delete */
+
+/* Teams page roster styles */
+.roster-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+.roster-card { padding: 12px; background: linear-gradient(180deg, var(--panel), var(--panel-2)); border: 1px solid #1b254a; border-radius: 12px; }
+.roster-header { display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: center; margin-bottom: 8px; }
+.roster-header input[type="color"] { width: 44px; height: 36px; padding: 0; border-radius: 8px; border: 1px solid #24315b; background: #0f1630; }
+.roster-header h2 { margin: 0; font-size: 16px; font-weight: 600; }
+.team-name-input { background: #0f1630; color: var(--text); border: 1px solid #24315b; border-radius: 8px; padding: 8px 10px; }
+.roster-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.roster-table thead th { text-align: left; font-weight: 600; border-bottom: 2px solid #1a2a50; padding: 6px 8px; }
+.roster-table th:nth-child(1), .roster-table td:nth-child(1) { width: 64px; }
+.roster-table th:nth-child(3), .roster-table td:nth-child(3) { width: 80px; }
+.roster-table tbody td { padding: 0; border-bottom: 1px solid #1a2a50; background: #bfe0ef; }
+.roster-cell { width: 100%; border: none; background: transparent; padding: 10px 8px; outline: none; font-family: inherit; font-size: 14px; color: #0a2130; }
+.roster-cell::placeholder { color: #5b7b8e; }
+.roster-table tbody tr:hover td { background: #cbe7f4; }
+
+/* Hockey-specific rink aspect (200 x 85 => ~2.3529:1) */
+.hockey-rink-wrapper { aspect-ratio: 200 / 85; padding: 0; }
+.hidden { display: none !important; }
+
+/* Modal dialog (shared) */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+.modal-backdrop.show { display: flex; }
+.modal {
+  width: min(520px, 92vw);
+  background: linear-gradient(180deg, var(--panel), var(--panel-2));
+  border: 1px solid #1b254a;
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+  color: var(--text);
+}
+.modal-header { padding: 12px 14px; border-bottom: 1px solid #1a2a50; font-weight: 600; }
+.modal-body { padding: 12px 14px; display: grid; gap: 10px; }
+.modal-footer { padding: 10px 14px; border-top: 1px solid #1a2a50; display: flex; gap: 8px; justify-content: flex-end; }
+.modal .row { display: grid; grid-template-columns: 180px 1fr; gap: 10px; align-items: center; }
+.kbd-input { background: #0f1630; color: var(--text); border: 1px solid #24315b; border-radius: 8px; padding: 8px 10px; }
+.shape-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
+.shape-option { display: grid; gap: 6px; place-items: center; padding: 8px; border: 1px solid #24315b; border-radius: 8px; background: #0f1630; cursor: pointer; }
+.shape-option.selected { outline: 2px solid #5fb0ff; }
+.shape-canvas { width: 48px; height: 48px; background: #0b1533; border-radius: 8px; border: 1px solid #24315b; }

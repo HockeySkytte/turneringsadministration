@@ -1,0 +1,425 @@
+"use client";
+
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+
+type TaRole =
+  | "CLUB_LEADER"
+  | "TEAM_LEADER"
+  | "SECRETARIAT"
+  | "REFEREE";
+
+const ROLE_OPTIONS: Array<{ value: TaRole; label: string; hint: string }> = [
+  {
+    value: "CLUB_LEADER",
+    label: "Klubleder",
+    hint: "Kan godkende holdledere og sekretariat (kræver turneringsadmin-godkendelse).",
+  },
+  {
+    value: "TEAM_LEADER",
+    label: "Holdleder",
+    hint: "Kan administrere spillerliste/lineup til kamp (kræver klubleder-godkendelse).",
+  },
+  {
+    value: "SECRETARIAT",
+    label: "Sekretariat",
+    hint: "Kan indtaste hjemmekampe/protokol (kræver klubleder-godkendelse).",
+  },
+  {
+    value: "REFEREE",
+    label: "Dommer",
+    hint: "Kan melde afbud og opdatere tilgængelighed (kræver dommeradmin-godkendelse).",
+  },
+];
+
+export default function SignupClient() {
+  const router = useRouter();
+
+  const [role, setRole] = useState<TaRole>("TEAM_LEADER");
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+
+  const [clubs, setClubs] = useState<Array<{ id: string; name: string; clubNo: string | null }>>([]);
+  const [clubId, setClubId] = useState<string | null>(null);
+  const [leagues, setLeagues] = useState<string[]>([]);
+  const [league, setLeague] = useState<string | null>(null);
+  const [teams, setTeams] = useState<Array<{ id: string; name: string }>>([]);
+  const [teamId, setTeamId] = useState<string | null>(null);
+
+  const [loadingLists, setLoadingLists] = useState(false);
+
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const hint = ROLE_OPTIONS.find((o) => o.value === role)?.hint ?? "";
+
+  const needsClub = role === "CLUB_LEADER" || role === "SECRETARIAT";
+  const needsTeam = role === "TEAM_LEADER";
+
+  const clubOptions = useMemo(
+    () =>
+      clubs.map((c) => {
+        const no = String(c.clubNo ?? "").trim();
+        const nameLabel = c.name;
+        return { id: c.id, label: no ? `${nameLabel} (${no})` : nameLabel };
+      }),
+    [clubs]
+  );
+
+  const leagueOptions = useMemo(
+    () => leagues.map((l) => ({ id: l, label: l })),
+    [leagues]
+  );
+
+  const teamOptions = useMemo(
+    () => teams.map((t) => ({ id: t.id, label: t.name })),
+    [teams]
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadClubs() {
+      setLoadingLists(true);
+      try {
+        const res = await fetch("/api/public/turnering/clubs", { cache: "no-store" });
+        const data = await res.json().catch(() => ({}));
+        if (cancelled) return;
+        if (res.ok && data?.ok === true && Array.isArray(data?.clubs)) {
+          setClubs(data.clubs as Array<{ id: string; name: string; clubNo: string | null }>);
+        } else {
+          setClubs([]);
+        }
+      } finally {
+        if (!cancelled) setLoadingLists(false);
+      }
+    }
+
+    void loadClubs();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    // Reset selections when role changes.
+    setClubId(null);
+    setLeague(null);
+    setTeamId(null);
+    setLeagues([]);
+    setTeams([]);
+  }, [role]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadLeagues() {
+      if (!clubId) {
+        setLeagues([]);
+        return;
+      }
+      const res = await fetch(`/api/public/turnering/leagues?clubId=${encodeURIComponent(clubId)}`, {
+        cache: "no-store",
+      });
+      const data = await res.json().catch(() => ({}));
+      if (cancelled) return;
+      if (res.ok && data?.ok === true && Array.isArray(data?.leagues)) {
+        setLeagues(data.leagues as string[]);
+      } else {
+        setLeagues([]);
+      }
+    }
+    void loadLeagues();
+    return () => {
+      cancelled = true;
+    };
+  }, [clubId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadTeams() {
+      if (!clubId || !league) {
+        setTeams([]);
+        return;
+      }
+      const res = await fetch(
+        `/api/public/turnering/teams?clubId=${encodeURIComponent(clubId)}&league=${encodeURIComponent(league)}`,
+        { cache: "no-store" }
+      );
+      const data = await res.json().catch(() => ({}));
+      if (cancelled) return;
+      if (res.ok && data?.ok === true && Array.isArray(data?.teams)) {
+        setTeams(data.teams as Array<{ id: string; name: string }>);
+      } else {
+        setTeams([]);
+      }
+    }
+    void loadTeams();
+    return () => {
+      cancelled = true;
+    };
+  }, [clubId, league]);
+
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setSuccess(null);
+    setLoading(true);
+
+    try {
+      const res = await fetch("/api/auth/signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          role,
+          name,
+          email,
+          username,
+          password,
+          clubId: needsClub ? clubId : null,
+          teamId: needsTeam ? teamId : null,
+        }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(data?.message ?? "Kunne ikke oprette bruger.");
+        return;
+      }
+
+      setSuccess("Bruger oprettet. Afventer godkendelse.");
+      router.push("/login");
+      router.refresh();
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <main className="mx-auto max-w-md px-4 py-12">
+      <h1 className="text-2xl font-semibold">Opret bruger</h1>
+
+      <form onSubmit={onSubmit} className="mt-6 space-y-4">
+        <div>
+          <label className="block text-sm font-medium">Brugertype</label>
+          <select
+            className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2"
+            value={role}
+            onChange={(e) => setRole(e.target.value as TaRole)}
+          >
+            {ROLE_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+          {hint ? <p className="mt-1 text-xs text-zinc-600">{hint}</p> : null}
+        </div>
+
+        {clubs.length === 0 ? (
+          <div className="rounded-md border border-zinc-200 bg-zinc-50 p-3 text-xs text-zinc-700">
+            {loadingLists
+              ? "Henter klubber…"
+              : "Der er ingen klubber endnu. Turneringsadmin skal først importere Excel og trykke 'Overskriv database'."}
+          </div>
+        ) : null}
+
+        {needsClub ? (
+          <SearchableSelect
+            label="Klub"
+            placeholder="Søg klub…"
+            options={clubOptions}
+            valueId={clubId}
+            onChange={(id) => setClubId(id)}
+            disabled={clubs.length === 0}
+          />
+        ) : null}
+
+        {needsTeam ? (
+          <div className="space-y-3">
+            <SearchableSelect
+              label="Klub"
+              placeholder="Søg klub…"
+              options={clubOptions}
+              valueId={clubId}
+              onChange={(id) => {
+                setClubId(id);
+                setLeague(null);
+                setTeamId(null);
+              }}
+              disabled={clubs.length === 0}
+            />
+
+            <SearchableSelect
+              label="Liga"
+              placeholder={clubId ? "Søg liga…" : "Vælg klub først"}
+              options={leagueOptions}
+              valueId={league}
+              onChange={(id) => {
+                setLeague(id);
+                setTeamId(null);
+              }}
+              disabled={!clubId || leagueOptions.length === 0}
+            />
+
+            <SearchableSelect
+              label="Hold"
+              placeholder={clubId && league ? "Søg hold…" : "Vælg klub og liga først"}
+              options={teamOptions}
+              valueId={teamId}
+              onChange={(id) => setTeamId(id)}
+              disabled={!clubId || !league || teamOptions.length === 0}
+            />
+          </div>
+        ) : null}
+
+        <div>
+          <label className="block text-sm font-medium">Navn (valgfrit)</label>
+          <input
+            className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            autoComplete="name"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium">Email</label>
+          <input
+            type="email"
+            className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            autoComplete="email"
+            required
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium">Brugernavn</label>
+          <input
+            className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            autoComplete="username"
+            required
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium">Kodeord</label>
+          <input
+            type="password"
+            className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            autoComplete="new-password"
+            required
+          />
+          <p className="mt-1 text-xs text-zinc-600">Mindst 6 tegn.</p>
+        </div>
+
+        {error ? <p className="text-sm text-red-600">{error}</p> : null}
+        {success ? <p className="text-sm text-green-700">{success}</p> : null}
+
+        <button
+          type="submit"
+          disabled={loading}
+          className="w-full rounded-md bg-[var(--brand)] px-4 py-2 text-[var(--brand-foreground)] disabled:opacity-50"
+        >
+          {loading ? "Opretter..." : "Opret bruger"}
+        </button>
+      </form>
+
+      <p className="mt-4 text-sm text-zinc-600">
+        Har du allerede en bruger?{" "}
+        <a className="underline" href="/login">
+          Log ind
+        </a>
+      </p>
+    </main>
+  );
+}
+
+function SearchableSelect({
+  label,
+  placeholder,
+  options,
+  valueId,
+  onChange,
+  disabled,
+}: {
+  label: string;
+  placeholder: string;
+  options: Array<{ id: string; label: string }>;
+  valueId: string | null;
+  onChange: (id: string | null) => void;
+  disabled?: boolean;
+}) {
+  const selected = options.find((o) => o.id === valueId) ?? null;
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return options.slice(0, 50);
+    return options
+      .filter((o) => o.label.toLowerCase().includes(q))
+      .slice(0, 50);
+  }, [options, query]);
+
+  return (
+    <div>
+      <label className="block text-sm font-medium">{label}</label>
+      <div className="relative">
+        <input
+          className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2"
+          value={open ? query : selected?.label ?? query}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setOpen(true);
+            onChange(null);
+          }}
+          placeholder={placeholder}
+          onFocus={() => {
+            setQuery(selected?.label ?? "");
+            setOpen(true);
+          }}
+          onBlur={() => {
+            // Let click selection win.
+            setTimeout(() => setOpen(false), 120);
+          }}
+          disabled={disabled}
+        />
+
+        {open && !disabled ? (
+          <div className="absolute z-10 mt-1 max-h-64 w-full overflow-auto rounded-md border border-zinc-200 bg-white shadow">
+            {filtered.length === 0 ? (
+              <div className="px-3 py-2 text-sm text-zinc-600">Ingen resultater.</div>
+            ) : (
+              filtered.map((o) => (
+                <button
+                  key={o.id}
+                  type="button"
+                  className={
+                    "block w-full px-3 py-2 text-left text-sm hover:bg-zinc-50 " +
+                    (o.id === valueId ? "bg-zinc-50 font-semibold" : "")
+                  }
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    onChange(o.id);
+                    setQuery(o.label);
+                    setOpen(false);
+                  }}
+                >
+                  {o.label}
+                </button>
+              ))
+            )}
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}

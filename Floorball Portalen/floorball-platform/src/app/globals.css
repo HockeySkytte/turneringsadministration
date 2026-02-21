@@ -1,0 +1,178 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+
+  /* Theme (default) */
+  /* Light mode brand (Floorball Danmark) */
+  --brand: #dc2626;
+  --brand-foreground: #ffffff;
+  --brand-secondary: #ffffff;
+  --app-background: var(--brand-secondary);
+
+  /* Surfaces (cards, dropdowns) */
+  --surface: #ffffff;
+  --surface-foreground: #171717;
+  --surface-border: color-mix(in srgb, #000000 10%, transparent);
+
+  /* Nav gradient derived from theme */
+  --nav-gradient: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--brand) 35%, var(--app-background)) 0%,
+    var(--app-background) 65%
+  );
+
+  /* Topbar (desktop/right side) */
+  --topbar-bg: color-mix(in srgb, var(--brand) 16%, white);
+  --topbar-foreground: #111827;
+
+  /* Table/row highlight (selected rows) */
+  --row-highlight: color-mix(in srgb, var(--brand) 12%, white);
+
+  --sidebar-from: color-mix(in srgb, var(--brand) 96%, black);
+  --sidebar-to: color-mix(in srgb, var(--brand) 35%, white);
+  --sidebar-gradient: linear-gradient(180deg, var(--sidebar-from) 0%, var(--sidebar-to) 100%);
+}
+
+/* View mode */
+html[data-view="DARK"] {
+  color-scheme: dark;
+
+  /* Dark mode brand (grey/dark-blue) */
+  --brand: #1f2937;
+  --brand-foreground: #ffffff;
+
+  /* Background should be dark grey, but lighter than tables/cards */
+  --app-background: #2b2f36;
+  --foreground: #ededed;
+
+  /* Surfaces (cards/tables) are slightly darker for contrast */
+  --surface: #141414;
+  --surface-foreground: #ededed;
+  --surface-border: color-mix(in srgb, #ffffff 8%, transparent);
+
+  /* Top bar is a bit lighter than the page background */
+  --topbar-bg: color-mix(in srgb, var(--brand) 22%, #3a3f47);
+  --topbar-foreground: #ededed;
+
+  /* Selected row highlight should be lighter for visibility */
+  --row-highlight: var(--topbar-bg);
+
+  --sidebar-from: #111827;
+  --sidebar-to: #4b5563;
+  --sidebar-gradient: linear-gradient(180deg, var(--sidebar-from) 0%, var(--sidebar-to) 100%);
+}
+
+/* Table header separator: always under the header row */
+table thead tr {
+  border-bottom: 2px solid var(--surface-border);
+}
+
+/* Pragmatic dark-mode overrides for common Tailwind utility classes used in the app */
+html[data-view="DARK"] .bg-white {
+  background-color: var(--surface) !important;
+}
+
+html[data-view="DARK"] .bg-zinc-50 {
+  background-color: color-mix(in srgb, var(--surface) 85%, #ffffff) !important;
+}
+
+html[data-view="DARK"] .bg-zinc-50\/50 {
+  background-color: color-mix(in srgb, var(--surface) 92%, #ffffff) !important;
+}
+
+html[data-view="DARK"] .hover\:bg-zinc-50:hover {
+  background-color: color-mix(in srgb, var(--surface) 78%, #ffffff) !important;
+}
+
+html[data-view="DARK"] .text-zinc-900,
+html[data-view="DARK"] .text-zinc-800 {
+  color: var(--surface-foreground) !important;
+}
+
+html[data-view="DARK"] .text-zinc-700,
+html[data-view="DARK"] .text-zinc-600 {
+  color: color-mix(in srgb, var(--surface-foreground) 75%, transparent) !important;
+}
+
+html[data-view="DARK"] .text-zinc-500 {
+  color: color-mix(in srgb, var(--surface-foreground) 60%, transparent) !important;
+}
+
+html[data-view="DARK"] .border-zinc-200,
+html[data-view="DARK"] .border-zinc-300 {
+  border-color: var(--surface-border) !important;
+}
+
+html[data-view="DARK"] .divide-zinc-100 > :not([hidden]) ~ :not([hidden]),
+html[data-view="DARK"] .divide-zinc-200 > :not([hidden]) ~ :not([hidden]) {
+  border-color: var(--surface-border) !important;
+}
+
+html[data-view="DARK"] .shadow-sm {
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.55) !important;
+}
+
+/* Kalender table row theming (must follow app's html[data-view] toggle, not OS dark mode) */
+.ta-kal-base {
+  background-color: #ffffff;
+}
+.ta-kal-base:hover {
+  background-color: #f4f4f5; /* zinc-100 */
+}
+
+.ta-kal-club {
+  background-color: #fef2f2; /* red-50 */
+}
+.ta-kal-club:hover {
+  background-color: #fee2e2; /* red-100 */
+}
+
+.ta-kal-team {
+  background-color: #fca5a5; /* red-300 */
+}
+.ta-kal-team:hover {
+  background-color: #fb7185; /* rose-400-ish (stronger) */
+}
+
+html[data-view="DARK"] .ta-kal-base {
+  background-color: #000000 !important;
+}
+html[data-view="DARK"] .ta-kal-base:hover {
+  background-color: #18181b !important; /* zinc-900 */
+}
+
+html[data-view="DARK"] .ta-kal-club {
+  background-color: #27272a !important; /* zinc-800 */
+}
+html[data-view="DARK"] .ta-kal-club:hover {
+  background-color: #3f3f46 !important; /* zinc-700 */
+}
+
+html[data-view="DARK"] .ta-kal-team {
+  background-color: #172554 !important; /* blue-950 */
+}
+html[data-view="DARK"] .ta-kal-team:hover {
+  background-color: #1e3a8a !important; /* blue-900 */
+}
+
+html[data-view="DARK"] .ta-kal-cell {
+  border-color: #18181b !important; /* zinc-900 */
+}
+
+/* NOTE: Team-based theming disabled (colors should only depend on view mode). */
+
+@theme inline {
+  --color-background: var(--app-background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--app-background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+  overflow-x: hidden;
+}
