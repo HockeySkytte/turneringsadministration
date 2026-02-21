@@ -96,6 +96,14 @@ function parseScoreText(text: string): { home: number; away: number; overtime: b
   return { home, away, overtime };
 }
 
+function isOvertimePeriod(period: string | null | undefined): boolean {
+  const p = String(period ?? "").trim().toUpperCase();
+  if (!p) return false;
+  if (p === "OT") return true;
+  const n = Number.parseInt(p, 10);
+  return Number.isFinite(n) && n > 3;
+}
+
 function isMergedTopLeague(league: string | null): boolean {
   const l = String(league ?? "").trim();
   return l === "Unihoc Floorball Liga" || l === "Select Ligaen";
@@ -298,8 +306,7 @@ export default async function StillingPage({
       const last = Number.isFinite(kampId) && kampId > 0 ? lastGoalByKampId.get(kampId) ?? null : null;
 
       const scoreFromEvents = last?.goal ? parseScoreText(last.goal) : null;
-      const periodNum = Number.parseInt(String(last?.period ?? ""), 10);
-      const isOtFromEvents = Boolean(scoreFromEvents) && Number.isFinite(periodNum) && periodNum > 3;
+      const isOtFromEvents = Boolean(scoreFromEvents) && isOvertimePeriod(last?.period);
 
       const scoreFallback = parseScoreText(String((m as { result?: unknown }).result ?? ""));
       const score = scoreFromEvents ?? scoreFallback;

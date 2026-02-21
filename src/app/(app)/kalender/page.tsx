@@ -76,6 +76,14 @@ function parseScoreText(text: string): { home: number; away: number; overtime: b
   return { home, away, overtime };
 }
 
+function isOvertimePeriod(period: string | null | undefined): boolean {
+  const p = String(period ?? "").trim().toUpperCase();
+  if (!p) return false;
+  if (p === "OT") return true;
+  const n = Number.parseInt(p, 10);
+  return Number.isFinite(n) && n > 3;
+}
+
 export default async function KalenderPage({
   searchParams,
 }: {
@@ -233,8 +241,7 @@ export default async function KalenderPage({
     const resultText = (() => {
       const fromEvents = last?.goal ? parseScoreText(last.goal) : null;
       if (fromEvents) {
-        const periodNum = Number.parseInt(String(last?.period ?? ""), 10);
-        const isOt = Number.isFinite(periodNum) && periodNum > 3;
+        const isOt = isOvertimePeriod(last?.period);
         const base = `${fromEvents.home}-${fromEvents.away}`;
         return isOt ? `${base} (SV)` : base;
       }

@@ -21,9 +21,20 @@ function parseTimeSeconds(time: string): number {
 }
 
 function parsePeriod(period: string): number {
-  const p = norm(period);
+  const p = norm(period).toUpperCase();
+  if (p === "OT") return 4;
   const n = Number.parseInt(p, 10);
   return Number.isFinite(n) && n > 0 ? n : 1;
+}
+
+function parsePimMinutes(pim: string, code?: string): number {
+  const p = norm(pim);
+  const c = norm(code);
+  if (!p) return 0;
+  if (/^2\s*\+\s*10$/i.test(p)) return 2;
+  if (p === "12" && c === "101") return 2;
+  const n = Number.parseInt(p, 10);
+  return Number.isFinite(n) && n > 0 ? n : 0;
 }
 
 function formatAbsTime(totalSeconds: number): string {
@@ -325,8 +336,8 @@ export default async function MatchStatsServer({
     const venue = e.venue;
     const t = e.timeAbsSeconds;
 
-    const pimMin = Number.parseInt(norm(e.pim), 10);
-    const hasPim = Number.isFinite(pimMin) && pimMin > 0;
+    const pimMin = parsePimMinutes(e.pim, e.code);
+    const hasPim = pimMin > 0;
 
     const isGoal = Boolean(norm(e.score));
 

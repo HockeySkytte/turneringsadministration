@@ -30,7 +30,8 @@ function parseTimeSeconds(time: string): number {
 }
 
 function parsePeriod(period: string): number {
-  const p = norm(period);
+  const p = norm(period).toUpperCase();
+  if (p === "OT") return 4;
   const n = Number.parseInt(p, 10);
   return Number.isFinite(n) && n > 0 ? n : 1;
 }
@@ -113,6 +114,16 @@ function attemptCount(pimMin: number): number {
   return pimMin === 4 ? 2 : 1;
 }
 
+function parsePimMinutes(pim: string, code?: string): number {
+  const p = norm(pim);
+  const c = norm(code);
+  if (!p) return 0;
+  if (/^2\s*\+\s*10$/i.test(p)) return 2;
+  if (p === "12" && c === "101") return 2;
+  const n = Number.parseInt(p, 10);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
 export default async function StatistikOverviewServer({
   ctx,
   mode,
@@ -190,6 +201,7 @@ export default async function StatistikOverviewServer({
         score: true,
         event: true,
         pim: true,
+        code: true,
       },
       orderBy: [{ kampId: "asc" }, { rowIndex: "asc" }],
     }),
@@ -354,8 +366,8 @@ export default async function StatistikOverviewServer({
         const venue = venueFromAny(e.venue ?? "");
         const periodNum = parsePeriod(norm(e.period));
         const sec = (periodNum - 1) * 20 * 60 + parseTimeSeconds(norm(e.time));
-        const pimMin = Number.parseInt(norm(e.pim), 10);
-        const hasPim = Number.isFinite(pimMin) && pimMin > 0;
+        const pimMin = parsePimMinutes(norm(e.pim), norm((e as any).code));
+        const hasPim = pimMin > 0;
         const isGoal = Boolean(norm(e.score)) || normKey(e.event) === "goal";
 
         return {

@@ -90,7 +90,8 @@ function parseTimeSeconds(time: string): number {
 }
 
 function parsePeriod(period: string): number {
-  const p = norm(period);
+  const p = norm(period).toUpperCase();
+  if (p === "OT") return 4;
   const n = Number.parseInt(p, 10);
   return Number.isFinite(n) && n > 0 ? n : 1;
 }
@@ -171,6 +172,16 @@ function cancelOnePenalty(segs: PenSeg[], defending: "Hjemme" | "Ude", t: number
 function attemptCount(pimMin: number): number {
   if (!Number.isFinite(pimMin) || pimMin <= 0) return 0;
   return pimMin === 4 ? 2 : 1;
+}
+
+function parsePimMinutes(pim: string, code?: string): number {
+  const p = norm(pim);
+  const c = norm(code);
+  if (!p) return 0;
+  if (/^2\s*\+\s*10$/i.test(p)) return 2;
+  if (p === "12" && c === "101") return 2;
+  const n = Number.parseInt(p, 10);
+  return Number.isFinite(n) && n > 0 ? n : 0;
 }
 
 type SearchParams = Record<string, string | string[] | undefined>;
@@ -348,6 +359,7 @@ export default async function StatistikOverviewTaServer({
         goal: true,
         assist: true,
         penalty: true,
+        code: true,
       },
       orderBy: [{ kampId: "asc" }, { rowIndex: "asc" }],
     }),
@@ -368,6 +380,7 @@ export default async function StatistikOverviewTaServer({
         score: true,
         event: true,
         pim: true,
+        code: true,
       },
       orderBy: [{ kampId: "asc" }, { rowIndex: "asc" }],
     }),
@@ -628,8 +641,8 @@ export default async function StatistikOverviewTaServer({
           const venue = venueFromAny(String(r.side ?? ""));
           const periodNum = parsePeriod(norm(r.period));
           const sec = (periodNum - 1) * 20 * 60 + parseTimeSeconds(norm(r.time));
-          const pimMin = Number.parseInt(norm(r.penalty), 10);
-          const hasPim = Number.isFinite(pimMin) && pimMin > 0;
+          const pimMin = parsePimMinutes(norm(r.penalty), norm(r.code));
+          const hasPim = pimMin > 0;
           const scoreText = norm(r.goal);
           const isGoal = Boolean(scoreText);
 
@@ -650,8 +663,8 @@ export default async function StatistikOverviewTaServer({
         const venue = venueFromAny(String(r.venue ?? ""));
         const periodNum = parsePeriod(norm(r.period));
         const sec = (periodNum - 1) * 20 * 60 + parseTimeSeconds(norm(r.time));
-        const pimMin = Number.parseInt(norm(r.pim), 10);
-        const hasPim = Number.isFinite(pimMin) && pimMin > 0;
+        const pimMin = parsePimMinutes(norm(r.pim), norm(r.code));
+        const hasPim = pimMin > 0;
         const scoreText = norm(r.score);
         const isGoal = Boolean(scoreText) || normKey(r.event) === "goal";
 

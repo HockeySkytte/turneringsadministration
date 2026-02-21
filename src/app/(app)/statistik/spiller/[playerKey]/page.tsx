@@ -44,7 +44,8 @@ function venueFromAny(value: unknown): "Hjemme" | "Ude" | null {
 }
 
 function parsePeriod(value: string): number {
-  const v = norm(value);
+  const v = norm(value).toUpperCase();
+  if (v === "OT") return 4;
   const n = Number.parseInt(v, 10);
   if (Number.isFinite(n) && n > 0) return n;
   return 1;
@@ -63,6 +64,16 @@ function parseTimeSeconds(value: string): number {
 function attemptCount(pimMin: number): number {
   if (!Number.isFinite(pimMin) || pimMin <= 0) return 0;
   return pimMin === 4 ? 2 : 1;
+}
+
+function parsePimMinutes(pim: string, code?: string): number {
+  const p = norm(pim);
+  const c = norm(code);
+  if (!p) return 0;
+  if (/^2\s*\+\s*10$/i.test(p)) return 2;
+  if (p === "12" && c === "101") return 2;
+  const n = Number.parseInt(p, 10);
+  return Number.isFinite(n) && n > 0 ? n : 0;
 }
 
 type PenSeg = { team: "Hjemme" | "Ude"; start: number; end: number };
@@ -197,7 +208,7 @@ export default async function StatistikSpillerPage({
 
   const protocolEvents = await prisma.matchProtocolEvent.findMany({
     where: { kampId: { in: kampIds } },
-    select: { kampId: true, rowIndex: true, period: true, time: true, side: true, number: true, goal: true, assist: true, penalty: true },
+    select: { kampId: true, rowIndex: true, period: true, time: true, side: true, number: true, goal: true, assist: true, penalty: true, code: true },
     orderBy: [{ kampId: "asc" }, { rowIndex: "asc" }],
   });
 
@@ -208,7 +219,7 @@ export default async function StatistikSpillerPage({
 
   const uploadEvents = await prisma.matchUploadEvent.findMany({
     where: { kampId: { in: kampIds } },
-    select: { kampId: true, rowIndex: true, venue: true, period: true, time: true, player1: true, player2: true, score: true, event: true, pim: true },
+    select: { kampId: true, rowIndex: true, venue: true, period: true, time: true, player1: true, player2: true, score: true, event: true, pim: true, code: true },
     orderBy: [{ kampId: "asc" }, { rowIndex: "asc" }],
   });
 
@@ -344,8 +355,8 @@ export default async function StatistikSpillerPage({
           const venue = venueFromAny(String(r.side ?? ""));
           const periodNum = parsePeriod(norm(r.period));
           const sec = (periodNum - 1) * 20 * 60 + parseTimeSeconds(norm(r.time));
-          const pimMin = Number.parseInt(norm(r.penalty), 10);
-          const hasPim = Number.isFinite(pimMin) && pimMin > 0;
+          const pimMin = parsePimMinutes(norm(r.penalty), norm(r.code));
+          const hasPim = pimMin > 0;
           const scoreText = norm(r.goal);
           const isGoal = Boolean(scoreText);
 
@@ -366,8 +377,8 @@ export default async function StatistikSpillerPage({
         const venue = venueFromAny(String(r.venue ?? ""));
         const periodNum = parsePeriod(norm(r.period));
         const sec = (periodNum - 1) * 20 * 60 + parseTimeSeconds(norm(r.time));
-        const pimMin = Number.parseInt(norm(r.pim), 10);
-        const hasPim = Number.isFinite(pimMin) && pimMin > 0;
+        const pimMin = parsePimMinutes(norm(r.pim), norm(r.code));
+        const hasPim = pimMin > 0;
         const scoreText = norm(r.score);
         const isGoal = Boolean(scoreText) || normKey(r.event) === "goal";
 
