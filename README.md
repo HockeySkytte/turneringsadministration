@@ -5,7 +5,7 @@ Webapp til floorball (dansk UI) for **admin**, **ledere**, **spillere** og **sup
 ## Kom i gang (Windows PowerShell)
 
 ```powershell
-Set-Location "c:\Users\larss\OneDrive\Apps\Floorball Platform\floorball-platform"
+Set-Location "c:\Users\larss\OneDrive\Apps\Turneringsadministration"
 npm.cmd install
 npm.cmd run dev
 ```
@@ -21,7 +21,7 @@ Seed opretter:
 Kør seed manuelt:
 
 ```powershell
-Set-Location "c:\Users\larss\OneDrive\Apps\Floorball Platform\floorball-platform"
+Set-Location "c:\Users\larss\OneDrive\Apps\Turneringsadministration"
 npx.cmd prisma db seed
 ```
 
