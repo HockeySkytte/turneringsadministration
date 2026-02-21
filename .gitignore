@@ -3,11 +3,23 @@
 # Python virtual environments
 .venv/
 
+# Yarn / PnP
+**/.pnp
+**/.pnp.*
+**/.yarn/*
+!**/.yarn/patches
+!**/.yarn/plugins
+!**/.yarn/releases
+!**/.yarn/versions
+
 # Node/Next common
 **/node_modules/
 **/.next/
 **/out/
 **/build/
+
+# Testing
+**/coverage/
 
 # Backup of previous nested git repo (should never be committed)
 **/.git.backup-*/
@@ -15,8 +27,18 @@
 # Env files
 **/.env*
 
+# Vercel
+**/.vercel/
+
 # Logs
 **/*.log
+
+# Local databases
+**/*.db
+**/prisma/**/*.db
+
+# Secrets
+**/*.pem
 
 # OS/editor
 .DS_Store

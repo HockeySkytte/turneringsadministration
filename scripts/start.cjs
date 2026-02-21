@@ -23,9 +23,15 @@ async function main() {
       "deploy",
     ], "prisma migrate deploy");
 
+    const port = process.env.PORT ? String(process.env.PORT) : "3000";
+
     await runNodeScript([
       "./node_modules/next/dist/bin/next",
       "start",
+      "-p",
+      port,
+      "-H",
+      "0.0.0.0",
     ], "next start");
   } catch (err) {
     console.error(String(err?.message ?? err));
