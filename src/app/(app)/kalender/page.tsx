@@ -115,61 +115,55 @@ export default async function KalenderPage({
       ? new Date(seasonStartYear + 1, 6, 31, 23, 59, 59, 999)
       : null;
 
-  const team = teamId
-    ? await prisma.taTeam.findUnique({
-        where: { id: teamId },
-        select: { id: true, name: true, clubId: true },
-      })
-    : null;
+  const selectedGender = gender === "MEN" || gender === "WOMEN" ? gender : null;
+  const otherGender = selectedGender === "MEN" ? "WOMEN" : selectedGender === "WOMEN" ? "MEN" : null;
 
-  const clubTeamNames = clubId
-    ? new Set(
-        (
-          await prisma.taTeam.findMany({
+  const [team, clubTeamNames, matches] = await Promise.all([
+    teamId
+      ? prisma.taTeam.findUnique({
+          where: { id: teamId },
+          select: { id: true, name: true, clubId: true },
+        })
+      : Promise.resolve(null),
+    clubId
+      ? prisma.taTeam
+          .findMany({
             where: { clubId },
             select: { name: true },
           })
-        ).map((t) => t.name)
-      )
-    : null;
-
-  const matches = await prisma.taMatch.findMany({
-    where: {
-      ...(leagueFilter ? { league: leagueFilter } : {}),
-      ...(poolFilter ? { pool: poolFilter } : {}),
-    },
-  });
-
-  const kampIds = matches
-    .map((m) => Number.parseInt(String(m.externalId ?? "").trim(), 10))
-    .filter((n) => Number.isFinite(n) && n > 0);
-
-  const lastGoals = kampIds.length
-    ? await prisma.matchProtocolEvent.findMany({
-        where: { kampId: { in: kampIds }, goal: { not: null } },
-        orderBy: [{ kampId: "asc" }, { rowIndex: "desc" }],
-        select: { kampId: true, goal: true, period: true },
-      })
-    : [];
-
-  const lastGoalByKampId = new Map<number, { goal: string; period: string | null }>();
-  for (const g of lastGoals) {
-    if (!lastGoalByKampId.has(g.kampId)) {
-      lastGoalByKampId.set(g.kampId, { goal: String(g.goal ?? "").trim(), period: g.period ?? null });
-    }
-  }
+          .then((rows) => new Set(rows.map((t) => t.name)))
+      : Promise.resolve(null),
+    prisma.taMatch.findMany({
+      where: {
+        ...(leagueFilter ? { league: leagueFilter } : {}),
+        ...(poolFilter ? { pool: poolFilter } : {}),
+        ...(stageFilter ? { stage: stageFilter } : {}),
+        ...(seasonStart && seasonEnd ? { date: { gte: seasonStart, lte: seasonEnd } } : {}),
+        ...(otherGender ? { NOT: { gender: { equals: otherGender, mode: "insensitive" } } } : {}),
+      },
+      select: {
+        id: true,
+        externalId: true,
+        date: true,
+        time: true,
+        league: true,
+        stage: true,
+        pool: true,
+        homeTeam: true,
+        awayTeam: true,
+        homeHoldId: true,
+        awayHoldId: true,
+        result: true,
+        gender: true,
+      },
+    }),
+  ]);
 
   const filteredMatches = matches.filter((m) => {
     const text = `${m.league ?? ""} ${m.pool ?? ""}`.trim();
 
-    if (seasonStart && seasonEnd) {
-      // If a season is selected, matches without a date must not leak into the results.
-      if (!m.date) return false;
-      if (m.date < seasonStart || m.date > seasonEnd) return false;
-    }
-
-    if (gender === "MEN" || gender === "WOMEN") {
-      if (!matchGenderForMatch({ text, storedGender: (m as { gender?: unknown }).gender }, gender)) return false;
+    if (selectedGender) {
+      if (!matchGenderForMatch({ text, storedGender: (m as { gender?: unknown }).gender }, selectedGender)) return false;
     }
 
     if (age) {
@@ -198,6 +192,25 @@ export default async function KalenderPage({
 
     return true;
   });
+
+  const kampIds = filteredMatches
+    .map((m) => Number.parseInt(String(m.externalId ?? "").trim(), 10))
+    .filter((n) => Number.isFinite(n) && n > 0);
+
+  const lastGoals = kampIds.length
+    ? await prisma.matchProtocolEvent.findMany({
+        where: { kampId: { in: kampIds }, goal: { not: null } },
+        orderBy: [{ kampId: "asc" }, { rowIndex: "desc" }],
+        select: { kampId: true, goal: true, period: true },
+      })
+    : [];
+
+  const lastGoalByKampId = new Map<number, { goal: string; period: string | null }>();
+  for (const g of lastGoals) {
+    if (!lastGoalByKampId.has(g.kampId)) {
+      lastGoalByKampId.set(g.kampId, { goal: String(g.goal ?? "").trim(), period: g.period ?? null });
+    }
+  }
 
   filteredMatches.sort((a, b) => {
     const aDate = a.date?.getTime() ?? Number.POSITIVE_INFINITY;

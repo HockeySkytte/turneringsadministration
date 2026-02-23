@@ -195,6 +195,26 @@ export default async function StillingPage({
     where: {
       ...leagueWhere(leagueFilter),
       ...(poolFilter ? { pool: poolFilter } : {}),
+      ...(stageFilter ? { stage: stageFilter } : {}),
+      ...(seasonStart && seasonEnd ? { date: { gte: seasonStart, lte: seasonEnd } } : {}),
+      ...(selectedGender === "MEN"
+        ? { NOT: { gender: { equals: "WOMEN", mode: "insensitive" } } }
+        : { NOT: { gender: { equals: "MEN", mode: "insensitive" } } }),
+    },
+    select: {
+      id: true,
+      externalId: true,
+      date: true,
+      time: true,
+      league: true,
+      stage: true,
+      pool: true,
+      homeTeam: true,
+      awayTeam: true,
+      homeHoldId: true,
+      awayHoldId: true,
+      result: true,
+      gender: true,
     },
   });
 
@@ -218,11 +238,6 @@ export default async function StillingPage({
 
   const filteredMatches = matches.filter((m) => {
     const text = `${m.league ?? ""} ${m.pool ?? ""}`.trim();
-
-    if (seasonStart && seasonEnd) {
-      if (!m.date) return false;
-      if (m.date < seasonStart || m.date > seasonEnd) return false;
-    }
 
     const stored = normalizeStoredGender((m as { gender?: unknown }).gender);
     if (stored) {

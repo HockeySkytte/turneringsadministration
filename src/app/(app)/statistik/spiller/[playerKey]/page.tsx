@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { ensureTurneringDomainTables } from "@/lib/turnering/db";
 import PlayerStatsClient, { type SeasonBlock } from "./PlayerStatsClient";
@@ -201,27 +202,75 @@ export default async function StatistikSpillerPage({
     });
   }
 
-  const protocolPlayers = await prisma.matchProtocolPlayer.findMany({
-    where: { kampId: { in: kampIds } },
-    select: { kampId: true, side: true, number: true, name: true, born: true },
-  });
+  // We only need lineup rows for this player (to map jersey number -> player for this match).
+  const protocolPlayers = await prisma.$queryRaw<
+    Array<{ kampId: number; side: "HOME" | "AWAY"; number: string | null; name: string | null; born: string | null }>
+  >`
+    SELECT "kampId", side, number, name, born
+    FROM "MatchProtocolPlayer"
+    WHERE "kampId" IN (${Prisma.join(kampIds)})
+      AND lower(trim(coalesce(name, ''))) = ${playerKey}
+  `;
+
+  const kampIdsWithProtoLineup = new Set<number>(protocolPlayers.map((p) => Number(p.kampId)));
+  const kampIdsNeedUploadLineup = kampIds.filter((k) => !kampIdsWithProtoLineup.has(k));
+
+  const uploadLineups = kampIdsNeedUploadLineup.length
+    ? await prisma.$queryRaw<
+        Array<{ kampId: number; venue: string | null; number: string | null; name: string | null; birthday: string | null }>
+      >`
+        SELECT "kampId", venue, number, name, birthday
+        FROM "MatchUploadLineup"
+        WHERE "kampId" IN (${Prisma.join(kampIdsNeedUploadLineup)})
+          AND lower(trim(coalesce(name, ''))) = ${playerKey}
+      `
+    : [];
 
   const protocolEvents = await prisma.matchProtocolEvent.findMany({
-    where: { kampId: { in: kampIds } },
-    select: { kampId: true, rowIndex: true, period: true, time: true, side: true, number: true, goal: true, assist: true, penalty: true, code: true },
+    where: {
+      kampId: { in: kampIds },
+      OR: [{ goal: { not: null } }, { penalty: { not: null } }, { code: { not: null } }, { time: { not: null } }],
+    },
+    select: {
+      kampId: true,
+      rowIndex: true,
+      period: true,
+      time: true,
+      side: true,
+      number: true,
+      goal: true,
+      assist: true,
+      penalty: true,
+      code: true,
+    },
     orderBy: [{ kampId: "asc" }, { rowIndex: "asc" }],
   });
 
-  const uploadLineups = await prisma.matchUploadLineup.findMany({
-    where: { kampId: { in: kampIds } },
-    select: { kampId: true, venue: true, number: true, name: true, birthday: true },
-  });
+  const kampIdsWithProtoEvents = new Set<number>(protocolEvents.map((e) => e.kampId));
+  const kampIdsNeedUploadEvents = kampIds.filter((k) => !kampIdsWithProtoEvents.has(k));
 
-  const uploadEvents = await prisma.matchUploadEvent.findMany({
-    where: { kampId: { in: kampIds } },
-    select: { kampId: true, rowIndex: true, venue: true, period: true, time: true, player1: true, player2: true, score: true, event: true, pim: true, code: true },
-    orderBy: [{ kampId: "asc" }, { rowIndex: "asc" }],
-  });
+  const uploadEvents = kampIdsNeedUploadEvents.length
+    ? await prisma.matchUploadEvent.findMany({
+        where: {
+          kampId: { in: kampIdsNeedUploadEvents },
+          OR: [{ score: { not: null } }, { pim: { not: null } }, { event: { not: null } }, { code: { not: null } }, { time: { not: null } }],
+        },
+        select: {
+          kampId: true,
+          rowIndex: true,
+          venue: true,
+          period: true,
+          time: true,
+          player1: true,
+          player2: true,
+          score: true,
+          event: true,
+          pim: true,
+          code: true,
+        },
+        orderBy: [{ kampId: "asc" }, { rowIndex: "asc" }],
+      })
+    : [];
 
   const protocolPlayersByKamp = new Map<number, Array<{ venue: "Hjemme" | "Ude"; number: string; name: string; birthday: string }>>();
   for (const p of protocolPlayers) {

@@ -243,11 +243,11 @@ export default async function StatistikOverviewTaServer({
       ? new Date(seasonStartYear + 1, 6, 31, 23, 59, 59, 999)
       : null;
 
-  const [team, clubsAll, clubTeams] = await Promise.all([
+  const [team, club, clubTeams] = await Promise.all([
     teamId
       ? prisma.taTeam.findUnique({ where: { id: teamId }, select: { id: true, name: true, clubId: true } })
       : Promise.resolve(null),
-    prisma.taClub.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } }),
+    clubId ? prisma.taClub.findUnique({ where: { id: clubId }, select: { name: true } }) : Promise.resolve(null),
     clubId ? prisma.taTeam.findMany({ where: { clubId }, select: { name: true } }) : Promise.resolve([]),
   ]);
 
@@ -256,19 +256,19 @@ export default async function StatistikOverviewTaServer({
     ? new Set(clubTeams.map((t) => canonicalKey(t.name)).filter(Boolean))
     : null;
 
-  const clubName = clubId ? clubsAll.find((c) => c.id === clubId)?.name ?? null : null;
+  const clubName = club?.name ?? null;
   const clubNameKey = clubName ? canonicalKey(clubName) : "";
 
   const matches = await prisma.taMatch.findMany({
     where: {
       ...(leagueIn ? { league: { in: leagueIn } } : {}),
       ...(poolFilter ? { pool: poolFilter } : {}),
+      ...(stageFilter ? { stage: stageFilter } : {}),
+      ...(seasonStart && seasonEnd ? { date: { gte: seasonStart, lte: seasonEnd } } : {}),
     },
     select: {
-      id: true,
       externalId: true,
       date: true,
-      time: true,
       league: true,
       stage: true,
       pool: true,
@@ -282,23 +282,12 @@ export default async function StatistikOverviewTaServer({
   const filteredMatches = matches.filter((m) => {
     const text = `${m.league ?? ""} ${m.pool ?? ""}`.trim();
 
-    if (seasonStart && seasonEnd) {
-      if (!m.date) return false;
-      if (m.date < seasonStart || m.date > seasonEnd) return false;
-    }
-
     if (gender === "MEN" || gender === "WOMEN") {
       if (!matchGender(text, gender)) return false;
     }
 
     if (age) {
       if (!matchAge(text, age)) return false;
-    }
-
-    if (stageFilter) {
-      const stage = String(m.stage ?? "").trim();
-      if (!stage) return false;
-      if (stage !== stageFilter) return false;
     }
 
     return true;
@@ -342,13 +331,23 @@ export default async function StatistikOverviewTaServer({
     return <StatistikOverviewClient data={empty} />;
   }
 
-  const [protocolPlayers, protocolEvents, uploadLineups, uploadEvents] = await Promise.all([
+  const [protocolPlayers, protocolEvents] = await Promise.all([
     prisma.matchProtocolPlayer.findMany({
       where: { kampId: { in: kampIds } },
       select: { kampId: true, side: true, number: true, name: true, born: true },
     }),
     prisma.matchProtocolEvent.findMany({
-      where: { kampId: { in: kampIds } },
+      where: {
+        kampId: { in: kampIds },
+        OR: [
+          { goal: { not: null } },
+          { assist: { not: null } },
+          { penalty: { not: null } },
+          { code: { not: null } },
+          { number: { not: null } },
+          { time: { not: null } },
+        ],
+      },
       select: {
         kampId: true,
         rowIndex: true,
@@ -363,27 +362,53 @@ export default async function StatistikOverviewTaServer({
       },
       orderBy: [{ kampId: "asc" }, { rowIndex: "asc" }],
     }),
-    prisma.matchUploadLineup.findMany({
-      where: { kampId: { in: kampIds } },
-      select: { kampId: true, venue: true, number: true, name: true, birthday: true },
-    }),
-    prisma.matchUploadEvent.findMany({
-      where: { kampId: { in: kampIds } },
-      select: {
-        kampId: true,
-        rowIndex: true,
-        venue: true,
-        period: true,
-        time: true,
-        player1: true,
-        player2: true,
-        score: true,
-        event: true,
-        pim: true,
-        code: true,
-      },
-      orderBy: [{ kampId: "asc" }, { rowIndex: "asc" }],
-    }),
+  ]);
+
+  const kampIdsWithProtoLineup = new Set<number>();
+  for (const p of protocolPlayers) kampIdsWithProtoLineup.add(p.kampId);
+  const kampIdsWithProtoEvents = new Set<number>();
+  for (const e of protocolEvents) kampIdsWithProtoEvents.add(e.kampId);
+
+  const kampIdsNeedUploadLineup = kampIds.filter((k) => !kampIdsWithProtoLineup.has(k));
+  const kampIdsNeedUploadEvents = kampIds.filter((k) => !kampIdsWithProtoEvents.has(k));
+
+  const [uploadLineups, uploadEvents] = await Promise.all([
+    kampIdsNeedUploadLineup.length
+      ? prisma.matchUploadLineup.findMany({
+          where: { kampId: { in: kampIdsNeedUploadLineup } },
+          select: { kampId: true, venue: true, number: true, name: true, birthday: true },
+        })
+      : Promise.resolve([]),
+    kampIdsNeedUploadEvents.length
+      ? prisma.matchUploadEvent.findMany({
+          where: {
+            kampId: { in: kampIdsNeedUploadEvents },
+            OR: [
+              { score: { not: null } },
+              { pim: { not: null } },
+              { event: { not: null } },
+              { player1: { not: null } },
+              { player2: { not: null } },
+              { code: { not: null } },
+              { time: { not: null } },
+            ],
+          },
+          select: {
+            kampId: true,
+            rowIndex: true,
+            venue: true,
+            period: true,
+            time: true,
+            player1: true,
+            player2: true,
+            score: true,
+            event: true,
+            pim: true,
+            code: true,
+          },
+          orderBy: [{ kampId: "asc" }, { rowIndex: "asc" }],
+        })
+      : Promise.resolve([]),
   ]);
 
   const protocolPlayersByKamp = new Map<
