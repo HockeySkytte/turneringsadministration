@@ -199,7 +199,7 @@ export default function KlublederRoleAssignmentsManagementClient({
   return (
     <div>
       <div className="text-sm font-semibold text-zinc-900">Alle holdledere og sekretariat</div>
-      <p className="mt-1 text-sm text-zinc-600">Redigér hold eller slet rolle-tilknytning.</p>
+      <p className="mt-1 text-sm text-zinc-600">Rediger eller slet rolle-tilknytning.</p>
 
       {error ? (
         <div className="mt-3 rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-900">
@@ -217,14 +217,16 @@ export default function KlublederRoleAssignmentsManagementClient({
             items.map((item) => {
               const disabled = deletingId === item.id;
 
-              const targetText =
-                item.role === "TEAM_LEADER"
-                  ? item.team
-                    ? `Hold: ${item.team.name} · ${item.team.league}`
-                    : "Hold: (mangler)"
-                  : item.club
-                    ? `Klub: ${formatClubLabel(item.club)}`
-                    : "Klub: (mangler)";
+              const targetText = (() => {
+                if (item.role === "TEAM_LEADER") {
+                  if (!item.team) return "Hold: (mangler)";
+                  const club = item.team.club ?? item.club;
+                  const clubPart = club ? ` · ${formatClubLabel(club)}` : "";
+                  return `Hold: ${item.team.name} · ${item.team.league}${clubPart}`;
+                }
+
+                return item.club ? `Klub: ${formatClubLabel(item.club)}` : "Klub: (mangler)";
+              })();
 
               return (
                 <div key={item.id} className="p-4">

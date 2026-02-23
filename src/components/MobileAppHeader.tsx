@@ -71,6 +71,7 @@ export default function MobileAppHeader({
   logoUrl: string | null;
 }) {
   const pathname = usePathname();
+  const hideSlicers = pathname === "/tilfoej-rolle" || pathname.startsWith("/tilfoej-rolle/") || pathname === "/indstillinger" || pathname.startsWith("/indstillinger/");
   const isMatchDetailPage =
     pathname === "/kamp" ||
     pathname.startsWith("/kamp/") ||
@@ -110,7 +111,7 @@ export default function MobileAppHeader({
   const [filtersOpen, setFiltersOpen] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
 
-  const allowFilters = !isMatchDetailPage;
+  const allowFilters = !isMatchDetailPage && !hideSlicers;
 
   useEffect(() => {
     if (!allowFilters) setFiltersOpen(false);

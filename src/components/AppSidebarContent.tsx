@@ -49,6 +49,7 @@ export default function AppSidebarContent({
   statsAggregationMode: StatsAggregationMode;
 }) {
   const pathname = usePathname();
+  const hideSlicers = pathname === "/tilfoej-rolle" || pathname.startsWith("/tilfoej-rolle/") || pathname === "/indstillinger" || pathname.startsWith("/indstillinger/");
   const isMatchDetailPage =
     pathname === "/kamp" ||
     pathname.startsWith("/kamp/") ||
@@ -95,7 +96,7 @@ export default function AppSidebarContent({
         </div>
 
         <div className="space-y-4">
-          {isMatchDetailPage ? null : useTaFilters ? (
+          {isMatchDetailPage || hideSlicers ? null : useTaFilters ? (
             <>
               <KalenderFiltersClient />
               {isStatistik ? <StatsAggregationModeSlicer mode={statsAggregationMode} /> : null}
