@@ -175,6 +175,16 @@ function parsePeriod(period: string): number {
   return Number.isFinite(n) && n > 0 ? n : 1;
 }
 
+function isOvertimePeriod(period: unknown): boolean {
+  const p = norm(period).toUpperCase();
+  if (!p) return false;
+  if (p === "OT") return true;
+  if (p === "SO" || p === "S.O." || p === "SHOOTOUT") return true;
+  if (p === "STRAFFESLAG" || p === "STRAFFESLAGS" || p === "PENALTY") return true;
+  const n = Number.parseInt(p, 10);
+  return Number.isFinite(n) && n > 3;
+}
+
 function parseBirthday(birthday: string): Date | null {
   const v = norm(birthday);
   if (!v) return null;
@@ -519,8 +529,7 @@ export default async function HoldPage({
       const resultText = (() => {
         const fromEvents = last?.goal ? parseScoreText(last.goal) : null;
         if (fromEvents) {
-          const periodNum = Number.parseInt(String(last?.period ?? ""), 10);
-          const isOt = Number.isFinite(periodNum) && periodNum > 3;
+          const isOt = isOvertimePeriod(last?.period);
           const base = `${fromEvents.home}-${fromEvents.away}`;
           return isOt ? `${base} (SV)` : base;
         }
@@ -678,8 +687,7 @@ export default async function HoldPage({
         const last = Number.isFinite(kampId) && kampId > 0 ? lastGoalByKampId.get(kampId) ?? null : null;
 
         const scoreFromEvents = last?.goal ? parseScoreText(last.goal) : null;
-        const periodNum = Number.parseInt(String(last?.period ?? ""), 10);
-        const isOtFromEvents = Boolean(scoreFromEvents) && Number.isFinite(periodNum) && periodNum > 3;
+        const isOtFromEvents = Boolean(scoreFromEvents) && isOvertimePeriod(last?.period);
 
         const scoreFallback = parseScoreText(String((m as { result?: unknown }).result ?? ""));
         const score = scoreFromEvents ?? scoreFallback;
