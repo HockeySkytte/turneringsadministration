@@ -20,6 +20,12 @@ function parseRole(value: unknown): TaRole | null {
   return (Object.values(TaRole) as string[]).includes(v) ? (v as TaRole) : null;
 }
 
+function parseClubLeaderTitle(value: unknown): string | null {
+  const v = String(value ?? "").trim().toUpperCase();
+  if (!v) return null;
+  return ["FORMAND", "KASSER", "BESTYRELSESMEDLEM"].includes(v) ? v : null;
+}
+
 export async function POST(req: Request) {
   const user = await requireApprovedUser();
   const body = await req.json().catch(() => null);
@@ -27,6 +33,8 @@ export async function POST(req: Request) {
   const role = parseRole(body?.role);
   const clubId = String(body?.clubId ?? "").trim() || null;
   const teamId = String(body?.teamId ?? "").trim() || null;
+  const clubLeaderTitle = parseClubLeaderTitle(body?.clubLeaderTitle);
+  const refereeId = String(body?.refereeId ?? "").trim() || null;
 
   if (!role) {
     return NextResponse.json({ message: "Vælg venligst en rolle." }, { status: 400 });
@@ -68,6 +76,32 @@ export async function POST(req: Request) {
     if (!clubId) return NextResponse.json({ message: "Vælg en klub." }, { status: 400 });
     const club = await prisma.taClub.findUnique({ where: { id: clubId }, select: { id: true } });
     if (!club) return NextResponse.json({ message: "Den valgte klub findes ikke." }, { status: 400 });
+  }
+
+  if (role === TaRole.CLUB_LEADER) {
+    if (!clubLeaderTitle) {
+      return NextResponse.json(
+        { message: "Vælg en rolle (Formand/Kassér/Bestyrelsesmedlem)." },
+        { status: 400 }
+      );
+    }
+  }
+
+  if (role === TaRole.REFEREE) {
+    if (!refereeId) {
+      return NextResponse.json(
+        { message: "Vælg en dommer fra dommerlisten." },
+        { status: 400 }
+      );
+    }
+
+    const referee = await prisma.taReferee.findUnique({ where: { id: refereeId }, select: { id: true } });
+    if (!referee) {
+      return NextResponse.json(
+        { message: "Den valgte dommer findes ikke i dommerlisten." },
+        { status: 400 }
+      );
+    }
   }
 
   // Extra guard: if a HoldID exists, prevent duplicate TEAM_LEADER requests across leagues.
@@ -113,6 +147,8 @@ export async function POST(req: Request) {
           clubId: role === TaRole.CLUB_LEADER || role === TaRole.SECRETARIAT ? clubId : null,
           teamId: role === TaRole.TEAM_LEADER ? teamId : null,
           holdId: role === TaRole.TEAM_LEADER ? holdId : null,
+          clubLeaderTitle: role === TaRole.CLUB_LEADER ? clubLeaderTitle : null,
+          refereeId: role === TaRole.REFEREE ? refereeId : null,
           scopeKey,
         },
         select: { id: true },
@@ -132,6 +168,8 @@ export async function POST(req: Request) {
         clubId: role === TaRole.CLUB_LEADER || role === TaRole.SECRETARIAT ? clubId : null,
         teamId: role === TaRole.TEAM_LEADER ? teamId : null,
         holdId: role === TaRole.TEAM_LEADER ? holdId : null,
+        clubLeaderTitle: role === TaRole.CLUB_LEADER ? clubLeaderTitle : null,
+        refereeId: role === TaRole.REFEREE ? refereeId : null,
         scopeKey,
       },
       select: { id: true },

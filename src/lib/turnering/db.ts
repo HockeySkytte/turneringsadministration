@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 
-const TURNERING_DOMAIN_SCHEMA_VERSION = 1;
+const TURNERING_DOMAIN_SCHEMA_VERSION = 13;
 
 const globalForTurnering = globalThis as unknown as {
   turneringDomainSchemaVersion?: number;
@@ -78,11 +78,16 @@ export async function ensureTurneringDomainTables() {
         date DATE,
         time TIME(0),
         venue TEXT,
+        "venueKey" TEXT,
         result TEXT,
         "dommer1" TEXT,
         "dommer1Id" TEXT,
+        "dommer1Status" TEXT,
+        "dommer1RespondedAt" TIMESTAMPTZ,
         "dommer2" TEXT,
         "dommer2Id" TEXT,
+        "dommer2Status" TEXT,
+        "dommer2RespondedAt" TIMESTAMPTZ,
         gender TEXT,
         league TEXT,
         stage TEXT,
@@ -101,11 +106,16 @@ export async function ensureTurneringDomainTables() {
     await prisma.$executeRawUnsafe(`ALTER TABLE ta_matches ADD COLUMN IF NOT EXISTS result TEXT;`);
     await prisma.$executeRawUnsafe(`ALTER TABLE ta_matches ADD COLUMN IF NOT EXISTS "dommer1" TEXT;`);
     await prisma.$executeRawUnsafe(`ALTER TABLE ta_matches ADD COLUMN IF NOT EXISTS "dommer1Id" TEXT;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE ta_matches ADD COLUMN IF NOT EXISTS "dommer1Status" TEXT;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE ta_matches ADD COLUMN IF NOT EXISTS "dommer1RespondedAt" TIMESTAMPTZ;`);
     await prisma.$executeRawUnsafe(`ALTER TABLE ta_matches ADD COLUMN IF NOT EXISTS "dommer2" TEXT;`);
     await prisma.$executeRawUnsafe(`ALTER TABLE ta_matches ADD COLUMN IF NOT EXISTS "dommer2Id" TEXT;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE ta_matches ADD COLUMN IF NOT EXISTS "dommer2Status" TEXT;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE ta_matches ADD COLUMN IF NOT EXISTS "dommer2RespondedAt" TIMESTAMPTZ;`);
     await prisma.$executeRawUnsafe(`ALTER TABLE ta_matches ADD COLUMN IF NOT EXISTS gender TEXT;`);
     await prisma.$executeRawUnsafe(`ALTER TABLE ta_matches ADD COLUMN IF NOT EXISTS "homeHoldId" TEXT;`);
     await prisma.$executeRawUnsafe(`ALTER TABLE ta_matches ADD COLUMN IF NOT EXISTS "awayHoldId" TEXT;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE ta_matches ADD COLUMN IF NOT EXISTS "venueKey" TEXT;`);
 
     // If table already existed with NOT NULL constraints, relax them.
     await prisma.$executeRawUnsafe(`ALTER TABLE ta_matches ALTER COLUMN date DROP NOT NULL;`);
@@ -114,6 +124,296 @@ export async function ensureTurneringDomainTables() {
     await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS ta_matches_date_time_idx ON ta_matches (date, time);`);
     await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS ta_matches_homeHoldId_idx ON ta_matches ("homeHoldId");`);
     await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS ta_matches_awayHoldId_idx ON ta_matches ("awayHoldId");`);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS ta_matches_venueKey_idx ON ta_matches ("venueKey");`);
+
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS ta_match_comments (
+        id TEXT PRIMARY KEY,
+        "kampId" INTEGER NOT NULL,
+        message TEXT NOT NULL,
+        "createdById" TEXT NOT NULL,
+        "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
+        "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now()
+      );
+    `);
+
+    await prisma.$executeRawUnsafe(`ALTER TABLE ta_match_comments ADD COLUMN IF NOT EXISTS "kampId" INTEGER;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE ta_match_comments ADD COLUMN IF NOT EXISTS message TEXT;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE ta_match_comments ADD COLUMN IF NOT EXISTS "createdById" TEXT;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE ta_match_comments ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMPTZ;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE ta_match_comments ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMPTZ;`);
+
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS ta_match_comments_kampId_createdAt_idx ON ta_match_comments ("kampId", "createdAt");`);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS ta_match_comments_createdById_idx ON ta_match_comments ("createdById");`);
+
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS ta_match_comment_reads (
+        "kampId" INTEGER NOT NULL,
+        "userId" TEXT NOT NULL,
+        "lastReadAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
+        "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
+        "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
+        CONSTRAINT ta_match_comment_reads_pk PRIMARY KEY ("kampId", "userId")
+      );
+    `);
+
+    await prisma.$executeRawUnsafe(`ALTER TABLE ta_match_comment_reads ADD COLUMN IF NOT EXISTS "kampId" INTEGER;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE ta_match_comment_reads ADD COLUMN IF NOT EXISTS "userId" TEXT;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE ta_match_comment_reads ADD COLUMN IF NOT EXISTS "lastReadAt" TIMESTAMPTZ;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE ta_match_comment_reads ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMPTZ;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE ta_match_comment_reads ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMPTZ;`);
+
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS ta_match_comment_reads_user_kamp_idx ON ta_match_comment_reads ("userId", "kampId");`);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS ta_match_comment_reads_lastReadAt_idx ON ta_match_comment_reads ("lastReadAt");`);
+
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS ta_match_move_requests (
+        id TEXT PRIMARY KEY,
+        "kampId" INTEGER NOT NULL,
+        status TEXT NOT NULL,
+        "proposedDate" DATE,
+        "proposedTime" TIME(0),
+        note TEXT,
+        "createdById" TEXT NOT NULL,
+        "awayDecidedById" TEXT,
+        "awayDecidedAt" TIMESTAMPTZ,
+        "taDecidedById" TEXT,
+        "taDecidedAt" TIMESTAMPTZ,
+        "rejectionReason" TEXT,
+        "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
+        "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now()
+      );
+    `);
+
+    await prisma.$executeRawUnsafe(`ALTER TABLE ta_match_move_requests ADD COLUMN IF NOT EXISTS "kampId" INTEGER;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE ta_match_move_requests ADD COLUMN IF NOT EXISTS status TEXT;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE ta_match_move_requests ADD COLUMN IF NOT EXISTS "proposedDate" DATE;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE ta_match_move_requests ADD COLUMN IF NOT EXISTS "proposedTime" TIME(0);`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE ta_match_move_requests ADD COLUMN IF NOT EXISTS note TEXT;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE ta_match_move_requests ADD COLUMN IF NOT EXISTS "createdById" TEXT;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE ta_match_move_requests ADD COLUMN IF NOT EXISTS "awayDecidedById" TEXT;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE ta_match_move_requests ADD COLUMN IF NOT EXISTS "awayDecidedAt" TIMESTAMPTZ;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE ta_match_move_requests ADD COLUMN IF NOT EXISTS "taDecidedById" TEXT;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE ta_match_move_requests ADD COLUMN IF NOT EXISTS "taDecidedAt" TIMESTAMPTZ;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE ta_match_move_requests ADD COLUMN IF NOT EXISTS "rejectionReason" TEXT;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE ta_match_move_requests ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMPTZ;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE ta_match_move_requests ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMPTZ;`);
+
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS ta_match_move_requests_kampId_createdAt_idx ON ta_match_move_requests ("kampId", "createdAt");`);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS ta_match_move_requests_status_idx ON ta_match_move_requests (status);`);
+
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS ta_venues (
+        key TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        address TEXT,
+        lat DOUBLE PRECISION,
+        lng DOUBLE PRECISION,
+        "geocodedAt" TIMESTAMPTZ,
+        "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
+        "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now()
+      );
+    `);
+
+    await prisma.$executeRawUnsafe(`ALTER TABLE ta_venues ADD COLUMN IF NOT EXISTS address TEXT;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE ta_venues ADD COLUMN IF NOT EXISTS "geocodeQuery" TEXT;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE ta_venues ADD COLUMN IF NOT EXISTS lat DOUBLE PRECISION;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE ta_venues ADD COLUMN IF NOT EXISTS lng DOUBLE PRECISION;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE ta_venues ADD COLUMN IF NOT EXISTS "geocodedAt" TIMESTAMPTZ;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE ta_venues ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMPTZ;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE ta_venues ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMPTZ;`);
+
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS ta_venue_clubs (
+        "venueKey" TEXT NOT NULL,
+        "clubId" TEXT NOT NULL,
+        "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
+        "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
+        CONSTRAINT ta_venue_clubs_pk PRIMARY KEY ("venueKey", "clubId")
+      );
+    `);
+
+    await prisma.$executeRawUnsafe(`ALTER TABLE ta_venue_clubs ADD COLUMN IF NOT EXISTS "venueKey" TEXT;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE ta_venue_clubs ADD COLUMN IF NOT EXISTS "clubId" TEXT;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE ta_venue_clubs ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMPTZ;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE ta_venue_clubs ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMPTZ;`);
+
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS ta_venue_clubs_venueKey_idx ON ta_venue_clubs ("venueKey");`);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS ta_venue_clubs_clubId_idx ON ta_venue_clubs ("clubId");`);
+
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS ta_player_licenses (
+        id TEXT PRIMARY KEY,
+        "licenseNumber" INTEGER NOT NULL,
+        name TEXT NOT NULL,
+        "birthDate" DATE NOT NULL,
+        gender TEXT NOT NULL,
+        "clubId" TEXT NOT NULL,
+        "doubleClubId" TEXT,
+        "doubleClubExpiresAt" DATE,
+        "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
+        "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
+        CONSTRAINT ta_player_licenses_licenseNumber_uq UNIQUE ("licenseNumber")
+      );
+    `);
+
+    await prisma.$executeRawUnsafe(`ALTER TABLE ta_player_licenses ADD COLUMN IF NOT EXISTS "licenseNumber" INTEGER;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE ta_player_licenses ADD COLUMN IF NOT EXISTS name TEXT;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE ta_player_licenses ADD COLUMN IF NOT EXISTS "birthDate" DATE;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE ta_player_licenses ADD COLUMN IF NOT EXISTS gender TEXT;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE ta_player_licenses ADD COLUMN IF NOT EXISTS "clubId" TEXT;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE ta_player_licenses ADD COLUMN IF NOT EXISTS "doubleClubId" TEXT;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE ta_player_licenses ADD COLUMN IF NOT EXISTS "doubleClubExpiresAt" DATE;`);
+
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS ta_player_licenses_clubId_idx ON ta_player_licenses ("clubId");`);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS ta_player_licenses_doubleClubId_idx ON ta_player_licenses ("doubleClubId");`);
+
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS ta_player_license_requests (
+        id TEXT PRIMARY KEY,
+        type TEXT NOT NULL,
+        status TEXT NOT NULL,
+        "fromClubId" TEXT,
+        "targetClubId" TEXT,
+        "licenseId" TEXT,
+        payload JSONB NOT NULL,
+        "createdById" TEXT NOT NULL,
+        "otherClubDecidedById" TEXT,
+        "otherClubDecidedAt" TIMESTAMPTZ,
+        "taDecidedById" TEXT,
+        "taDecidedAt" TIMESTAMPTZ,
+        "rejectionReason" TEXT,
+        "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
+        "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now()
+      );
+    `);
+
+    await prisma.$executeRawUnsafe(`ALTER TABLE ta_player_license_requests ADD COLUMN IF NOT EXISTS type TEXT;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE ta_player_license_requests ADD COLUMN IF NOT EXISTS status TEXT;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE ta_player_license_requests ADD COLUMN IF NOT EXISTS "fromClubId" TEXT;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE ta_player_license_requests ADD COLUMN IF NOT EXISTS "targetClubId" TEXT;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE ta_player_license_requests ADD COLUMN IF NOT EXISTS "licenseId" TEXT;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE ta_player_license_requests ADD COLUMN IF NOT EXISTS payload JSONB;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE ta_player_license_requests ADD COLUMN IF NOT EXISTS "createdById" TEXT;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE ta_player_license_requests ADD COLUMN IF NOT EXISTS "otherClubDecidedById" TEXT;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE ta_player_license_requests ADD COLUMN IF NOT EXISTS "otherClubDecidedAt" TIMESTAMPTZ;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE ta_player_license_requests ADD COLUMN IF NOT EXISTS "taDecidedById" TEXT;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE ta_player_license_requests ADD COLUMN IF NOT EXISTS "taDecidedAt" TIMESTAMPTZ;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE ta_player_license_requests ADD COLUMN IF NOT EXISTS "rejectionReason" TEXT;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE ta_player_license_requests ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMPTZ;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE ta_player_license_requests ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMPTZ;`);
+
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS ta_player_license_requests_status_idx ON ta_player_license_requests (status);`);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS ta_player_license_requests_fromClubId_idx ON ta_player_license_requests ("fromClubId");`);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS ta_player_license_requests_targetClubId_idx ON ta_player_license_requests ("targetClubId");`);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS ta_player_license_requests_createdAt_idx ON ta_player_license_requests ("createdAt");`);
+
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS ta_referees (
+        id TEXT PRIMARY KEY,
+        "refereeNo" TEXT NOT NULL,
+        name TEXT NOT NULL,
+        club TEXT,
+        address TEXT,
+        email TEXT,
+        phone TEXT,
+        "partner1" TEXT,
+        "partner2" TEXT,
+        "partner3" TEXT,
+        "eligibleLeagues" JSONB,
+        "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
+        "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
+        CONSTRAINT ta_referees_refereeNo_uq UNIQUE ("refereeNo")
+      );
+    `);
+
+    await prisma.$executeRawUnsafe(`ALTER TABLE ta_referees ADD COLUMN IF NOT EXISTS "refereeNo" TEXT;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE ta_referees ADD COLUMN IF NOT EXISTS name TEXT;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE ta_referees ADD COLUMN IF NOT EXISTS club TEXT;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE ta_referees ADD COLUMN IF NOT EXISTS address TEXT;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE ta_referees ADD COLUMN IF NOT EXISTS lat DOUBLE PRECISION;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE ta_referees ADD COLUMN IF NOT EXISTS lng DOUBLE PRECISION;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE ta_referees ADD COLUMN IF NOT EXISTS "geocodedAt" TIMESTAMPTZ;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE ta_referees ADD COLUMN IF NOT EXISTS email TEXT;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE ta_referees ADD COLUMN IF NOT EXISTS phone TEXT;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE ta_referees ADD COLUMN IF NOT EXISTS "partner1" TEXT;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE ta_referees ADD COLUMN IF NOT EXISTS "partner2" TEXT;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE ta_referees ADD COLUMN IF NOT EXISTS "partner3" TEXT;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE ta_referees ADD COLUMN IF NOT EXISTS "eligibleLeagues" JSONB;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE ta_referees ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMPTZ;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE ta_referees ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMPTZ;`);
+
+    await prisma.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS ta_referees_refereeNo_uq_idx ON ta_referees ("refereeNo");`);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS ta_referees_name_idx ON ta_referees (name);`);
+
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS ta_referee_availability (
+        id TEXT PRIMARY KEY,
+        "refereeId" TEXT NOT NULL,
+        "entryDate" DATE NOT NULL,
+        status TEXT NOT NULL,
+        "startTime" TIME(0),
+        "endTime" TIME(0),
+        "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
+        "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now()
+      );
+    `);
+
+    // Allow multiple segments per day (drop legacy unique constraint if present).
+    await prisma.$executeRawUnsafe(`
+      DO $$
+      BEGIN
+        IF EXISTS (
+          SELECT 1
+          FROM pg_constraint
+          WHERE conname = 'ta_referee_availability_unique'
+            AND conrelid = 'ta_referee_availability'::regclass
+        ) THEN
+          ALTER TABLE ta_referee_availability DROP CONSTRAINT ta_referee_availability_unique;
+        END IF;
+      END $$;
+    `);
+
+    await prisma.$executeRawUnsafe(`ALTER TABLE ta_referee_availability ADD COLUMN IF NOT EXISTS "refereeId" TEXT;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE ta_referee_availability ADD COLUMN IF NOT EXISTS "entryDate" DATE;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE ta_referee_availability ADD COLUMN IF NOT EXISTS status TEXT;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE ta_referee_availability ADD COLUMN IF NOT EXISTS "startTime" TIME(0);`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE ta_referee_availability ADD COLUMN IF NOT EXISTS "endTime" TIME(0);`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE ta_referee_availability ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMPTZ;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE ta_referee_availability ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMPTZ;`);
+
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS ta_referee_availability_entryDate_idx ON ta_referee_availability ("entryDate");`);
+    await prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS ta_referee_availability_referee_entry_idx ON ta_referee_availability ("refereeId", "entryDate");`
+    );
+
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS ta_referee_availability_rules (
+        id TEXT PRIMARY KEY,
+        "refereeId" TEXT NOT NULL,
+        weekday INTEGER NOT NULL,
+        status TEXT NOT NULL,
+        "startTime" TIME(0),
+        "endTime" TIME(0),
+        "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
+        "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now()
+      );
+    `);
+
+    await prisma.$executeRawUnsafe(`ALTER TABLE ta_referee_availability_rules ADD COLUMN IF NOT EXISTS "refereeId" TEXT;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE ta_referee_availability_rules ADD COLUMN IF NOT EXISTS weekday INTEGER;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE ta_referee_availability_rules ADD COLUMN IF NOT EXISTS status TEXT;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE ta_referee_availability_rules ADD COLUMN IF NOT EXISTS "startTime" TIME(0);`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE ta_referee_availability_rules ADD COLUMN IF NOT EXISTS "endTime" TIME(0);`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE ta_referee_availability_rules ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMPTZ;`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE ta_referee_availability_rules ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMPTZ;`);
+
+    await prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS ta_referee_availability_rules_referee_weekday_idx ON ta_referee_availability_rules ("refereeId", weekday);`
+    );
+    await prisma.$executeRawUnsafe(
+      `CREATE INDEX IF NOT EXISTS ta_referee_availability_rules_referee_idx ON ta_referee_availability_rules ("refereeId");`
+    );
 
     globalForTurnering.turneringDomainSchemaVersion = TURNERING_DOMAIN_SCHEMA_VERSION;
   })().finally(() => {
@@ -128,6 +428,10 @@ export async function ensureTaUserRoleMetadataColumns() {
   await prisma.$executeRawUnsafe(`ALTER TABLE ta_user_roles ADD COLUMN IF NOT EXISTS "clubId" TEXT;`);
   await prisma.$executeRawUnsafe(`ALTER TABLE ta_user_roles ADD COLUMN IF NOT EXISTS "teamId" TEXT;`);
   await prisma.$executeRawUnsafe(`ALTER TABLE ta_user_roles ADD COLUMN IF NOT EXISTS "holdId" TEXT;`);
+
+  await prisma.$executeRawUnsafe(`ALTER TABLE ta_user_roles ADD COLUMN IF NOT EXISTS "clubLeaderTitle" TEXT;`);
+  await prisma.$executeRawUnsafe(`ALTER TABLE ta_user_roles ADD COLUMN IF NOT EXISTS "refereeId" TEXT;`);
+  await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS ta_user_roles_refereeId_idx ON ta_user_roles ("refereeId");`);
 
   // Role scoping key (allows multiple roles of same type per user).
   await prisma.$executeRawUnsafe(
@@ -175,6 +479,18 @@ export async function ensureTaUserRoleMetadataColumns() {
   // Ensure new uniqueness.
   await prisma.$executeRawUnsafe(
     `CREATE UNIQUE INDEX IF NOT EXISTS ta_user_roles_user_role_scope_uq ON ta_user_roles ("userId", role, "scopeKey");`
+  );
+}
+
+export async function ensureTaUserContactColumns() {
+  // The auth tables already exist; add columns only if missing.
+  await prisma.$executeRawUnsafe(`ALTER TABLE ta_users ADD COLUMN IF NOT EXISTS "phoneNumber" TEXT;`);
+}
+
+export async function ensureTaUserNotificationPreferenceColumns() {
+  // Persist notification preferences on TA users.
+  await prisma.$executeRawUnsafe(
+    `ALTER TABLE ta_users ADD COLUMN IF NOT EXISTS "notificationPreferences" JSONB;`
   );
 }
 
@@ -257,6 +573,8 @@ export async function ensureTaRosterTables() {
       CONSTRAINT ta_roster_players_rosterId_fkey FOREIGN KEY ("rosterId") REFERENCES ta_rosters(id) ON DELETE CASCADE,
       "rowIndex" INTEGER NOT NULL,
       number TEXT,
+      role TEXT,
+      "licenseId" TEXT,
       name TEXT NOT NULL,
       "birthDate" DATE,
       "imageUrl" TEXT,
@@ -265,7 +583,12 @@ export async function ensureTaRosterTables() {
       CONSTRAINT ta_roster_players_roster_row_uq UNIQUE ("rosterId", "rowIndex")
     );
   `);
+  await prisma.$executeRawUnsafe(`ALTER TABLE ta_roster_players ADD COLUMN IF NOT EXISTS role TEXT;`);
+  await prisma.$executeRawUnsafe(`ALTER TABLE ta_roster_players ADD COLUMN IF NOT EXISTS "licenseId" TEXT;`);
   await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS ta_roster_players_rosterId_idx ON ta_roster_players ("rosterId");`);
+  await prisma.$executeRawUnsafe(
+    `CREATE UNIQUE INDEX IF NOT EXISTS ta_roster_players_roster_license_uq ON ta_roster_players ("rosterId", "licenseId") WHERE "licenseId" IS NOT NULL AND "licenseId" <> '';`,
+  );
 
   await prisma.$executeRawUnsafe(`
     CREATE TABLE IF NOT EXISTS ta_roster_leaders (
@@ -273,6 +596,7 @@ export async function ensureTaRosterTables() {
       "rosterId" TEXT NOT NULL,
       CONSTRAINT ta_roster_leaders_rosterId_fkey FOREIGN KEY ("rosterId") REFERENCES ta_rosters(id) ON DELETE CASCADE,
       "rowIndex" INTEGER NOT NULL,
+      role TEXT,
       name TEXT NOT NULL,
       "imageUrl" TEXT,
       "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -280,5 +604,6 @@ export async function ensureTaRosterTables() {
       CONSTRAINT ta_roster_leaders_roster_row_uq UNIQUE ("rosterId", "rowIndex")
     );
   `);
+  await prisma.$executeRawUnsafe(`ALTER TABLE ta_roster_leaders ADD COLUMN IF NOT EXISTS role TEXT;`);
   await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS ta_roster_leaders_rosterId_idx ON ta_roster_leaders ("rosterId");`);
 }

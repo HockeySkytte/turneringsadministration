@@ -18,6 +18,7 @@ export async function GET() {
       role: true,
       status: true,
       createdAt: true,
+      clubLeaderTitle: true,
       club: { select: { id: true, name: true, clubNo: true } },
       user: {
         select: {

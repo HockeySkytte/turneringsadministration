@@ -4,19 +4,11 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
-import SeasonSlicer, { type SeasonOption } from "@/components/SeasonSlicer";
-import GenderSlicer from "@/components/GenderSlicer";
-import AgeGroupSlicer from "@/components/AgeGroupSlicer";
-import CompetitionRowSlicer, {
-  type CompetitionRowOption,
-} from "@/components/CompetitionRowSlicer";
-import CompetitionPoolSlicer, {
-  type CompetitionPoolOption,
-} from "@/components/CompetitionPoolSlicer";
-import CompetitionTeamSlicer, {
-  type CompetitionTeamOption,
-} from "@/components/CompetitionTeamSlicer";
-import CalendarModeSlicer, { type CalendarMode } from "@/components/CalendarModeSlicer";
+import type { SeasonOption } from "@/components/SeasonSlicer";
+import type { CompetitionRowOption } from "@/components/CompetitionRowSlicer";
+import type { CompetitionPoolOption } from "@/components/CompetitionPoolSlicer";
+import type { CompetitionTeamOption } from "@/components/CompetitionTeamSlicer";
+import type { CalendarMode } from "@/components/CalendarModeSlicer";
 import StatsAggregationModeSlicer, { type StatsAggregationMode } from "@/components/StatsAggregationModeSlicer";
 import type { AgeGroupValue } from "@/lib/ageGroups";
 import KalenderFiltersClient from "@/components/ta/KalenderFiltersClient";
@@ -33,6 +25,8 @@ export default function MobileAppHeader({
   canAccessTurnering,
   canAccessKlubleder,
   canAccessHoldleder,
+  canAccessDommerpaasaetter,
+  canAccessDommer,
   viewMode,
   seasons,
   selectedSeasonStartYear,
@@ -54,6 +48,8 @@ export default function MobileAppHeader({
   canAccessTurnering: boolean;
   canAccessKlubleder: boolean;
   canAccessHoldleder: boolean;
+  canAccessDommerpaasaetter: boolean;
+  canAccessDommer: boolean;
   viewMode: ViewMode;
   seasons: SeasonOption[];
   selectedSeasonStartYear: number | null;
@@ -71,16 +67,26 @@ export default function MobileAppHeader({
   logoUrl: string | null;
 }) {
   const pathname = usePathname();
-  const hideSlicers = pathname === "/tilfoej-rolle" || pathname.startsWith("/tilfoej-rolle/") || pathname === "/indstillinger" || pathname.startsWith("/indstillinger/");
+  const hideSlicers =
+    pathname === "/tilfoej-rolle" ||
+    pathname.startsWith("/tilfoej-rolle/") ||
+    pathname === "/indstillinger" ||
+    pathname.startsWith("/indstillinger/") ||
+    pathname === "/klubleder" ||
+    pathname.startsWith("/klubleder/") ||
+    pathname === "/holdleder" ||
+    pathname.startsWith("/holdleder/") ||
+    pathname === "/dommerpaasaetter" ||
+    pathname.startsWith("/dommerpaasaetter/") ||
+    pathname === "/dommer" ||
+    pathname.startsWith("/dommer/");
   const isMatchDetailPage =
     pathname === "/kamp" ||
     pathname.startsWith("/kamp/") ||
     pathname === "/kampe" ||
     pathname.startsWith("/kampe/") ||
     pathname.startsWith("/kalender/kamp/");
-  const isKalender = pathname === "/kalender";
   const isStatistik = pathname === "/statistik";
-  const isStilling = pathname === "/stilling";
   const useTaFilters =
     pathname === "/kalender" ||
     pathname.startsWith("/kalender/") ||
@@ -111,7 +117,7 @@ export default function MobileAppHeader({
   const [filtersOpen, setFiltersOpen] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
 
-  const allowFilters = !isMatchDetailPage && !hideSlicers;
+  const allowFilters = !isMatchDetailPage && !hideSlicers && useTaFilters;
 
   useEffect(() => {
     if (!allowFilters) setFiltersOpen(false);
@@ -278,6 +284,26 @@ export default function MobileAppHeader({
                   </Link>
                 ) : null}
 
+                {canAccessDommerpaasaetter ? (
+                  <Link
+                    className="block px-4 py-4 text-lg font-semibold"
+                    href="/dommerpaasaetter"
+                    onClick={closeMenu}
+                  >
+                    Dommerpåsætter
+                  </Link>
+                ) : null}
+
+                {canAccessDommer ? (
+                  <Link
+                    className="block px-4 py-4 text-lg font-semibold"
+                    href="/dommer"
+                    onClick={closeMenu}
+                  >
+                    Dommer
+                  </Link>
+                ) : null}
+
                 <div className="px-4 py-4">
                   <div className="text-sm font-semibold opacity-90">Visning</div>
                   <div className="mt-2 flex overflow-hidden rounded-md border border-white/20 bg-white/10">
@@ -339,61 +365,12 @@ export default function MobileAppHeader({
         {/* Filters (mobile) */}
         {filtersOpen && allowFilters ? (
           <div className="mt-5 px-5 pb-5">
-            {useTaFilters ? (
-              <KalenderFiltersClient />
-            ) : (
-              <>
-                <div className="flex items-center justify-between rounded-full border border-white/15 bg-white/5 px-4 py-3">
-                  <div className="text-sm font-semibold opacity-90">
-                    {rows.find((r) => r.id === selectedRowId)?.name ?? ""}
-                  </div>
-                </div>
-
-                <div className="mt-4">
-                  <SeasonSlicer seasons={seasons} selectedStartYear={selectedSeasonStartYear} />
-                </div>
-
-                <div className="mt-4">
-                  <GenderSlicer selectedGender={selectedGender} />
-                </div>
-
-                <div className="mt-4">
-                  <AgeGroupSlicer ageGroups={ageGroups} selectedAgeGroup={selectedAgeGroup} />
-                </div>
-
-                <div className="mt-4">
-                  <CompetitionRowSlicer rows={rows} selectedRowId={selectedRowId} />
-                </div>
-
-                <div className="mt-4">
-                  <CompetitionPoolSlicer pools={pools} selectedPoolId={selectedPoolId} />
-                </div>
-
-                <div className="mt-4">
-                  <CompetitionTeamSlicer teams={poolTeams} selectedTeamName={selectedTeamName} />
-                </div>
-
-                <div className="mt-4">
-                  <CalendarModeSlicer mode={calendarMode} hasTeam={Boolean(selectedTeamName)} />
-                </div>
-
-                <div className="mt-4">
-                  <StatsAggregationModeSlicer mode={statsAggregationMode} />
-                </div>
-
-                <div className="mt-6 text-lg italic opacity-95">
-                  Data fra{" "}
-                  <a
-                    href="https://www.sportssys.dk/"
-                    target="_blank"
-                    rel="noreferrer noopener"
-                    className="font-semibold text-white underline underline-offset-2"
-                  >
-                    Sportssys
-                  </a>
-                </div>
-              </>
-            )}
+            <KalenderFiltersClient />
+            {isStatistik ? (
+              <div className="mt-4">
+                <StatsAggregationModeSlicer mode={statsAggregationMode} />
+              </div>
+            ) : null}
           </div>
         ) : null}
       </div>

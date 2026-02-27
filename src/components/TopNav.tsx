@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 
@@ -32,6 +32,8 @@ export type TopNavUser = {
   canAccessTurnering: boolean;
   canAccessKlubleder: boolean;
   canAccessHoldleder: boolean;
+  canAccessDommerpaasaetter: boolean;
+  canAccessDommer: boolean;
 };
 
 export type ViewMode = "LIGHT" | "DARK";
@@ -47,7 +49,97 @@ export default function TopNav({
   const userMenuRef = useRef<HTMLDetailsElement | null>(null);
   const searchParams = useSearchParams();
 
+  const [dommerpaasaetterIssues, setDommerpaasaetterIssues] = useState<number>(0);
+  const [turneringPendingTotal, setTurneringPendingTotal] = useState<number>(0);
+  const [holdlederAttention, setHoldlederAttention] = useState<number>(0);
+
   const filtersSuffix = useMemo(() => pickFilterQuery(searchParams), [searchParams]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadIssues() {
+      if (!user?.canAccessDommerpaasaetter) return;
+      try {
+        const res = await fetch("/api/dommerpaasaetter/notifications", { cache: "no-store" });
+        const data = (await res.json().catch(() => ({}))) as { ok?: boolean; issuesCount?: number };
+        if (!res.ok || data.ok !== true) return;
+        if (cancelled) return;
+        setDommerpaasaetterIssues(typeof data.issuesCount === "number" ? data.issuesCount : 0);
+      } catch {
+        // Ignore
+      }
+    }
+
+    void loadIssues();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.canAccessDommerpaasaetter]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadTurnering() {
+      if (!user?.canAccessTurnering) return;
+      try {
+        const res = await fetch("/api/turnering/notifications", { cache: "no-store" });
+        const data = (await res.json().catch(() => ({}))) as any;
+        if (!res.ok || data?.ok !== true) return;
+        if (cancelled) return;
+        const total = Number(data?.pending?.total ?? 0);
+        setTurneringPendingTotal(Number.isFinite(total) ? total : 0);
+      } catch {
+        // Ignore
+      }
+    }
+
+    void loadTurnering();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.canAccessTurnering]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadHoldleder() {
+      if (!user?.canAccessHoldleder) return;
+      try {
+        const res = await fetch("/api/holdleder/notifications", { cache: "no-store" });
+        const data = (await res.json().catch(() => ({}))) as any;
+        if (!res.ok || data?.ok !== true) return;
+        if (cancelled) return;
+        const n = Number(data?.attentionCount ?? 0);
+        setHoldlederAttention(Number.isFinite(n) ? n : 0);
+      } catch {
+        // Ignore
+      }
+    }
+
+    void loadHoldleder();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.canAccessHoldleder]);
+
+  const dommerpaasaetterBadge =
+    user?.canAccessDommerpaasaetter && dommerpaasaetterIssues > 0 ? (
+      <span className="ml-2 inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-red-600 px-1.5 py-0.5 text-xs font-semibold text-white">
+        {dommerpaasaetterIssues}
+      </span>
+    ) : null;
+
+  const turneringBadge =
+    user?.canAccessTurnering && turneringPendingTotal > 0 ? (
+      <span className="ml-2 inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-red-600 px-1.5 py-0.5 text-xs font-semibold text-white">
+        {turneringPendingTotal}
+      </span>
+    ) : null;
+
+  const holdlederBadge =
+    user?.canAccessHoldleder && holdlederAttention > 0 ? (
+      <span className="ml-2 inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-red-600 px-1.5 py-0.5 text-xs font-semibold text-white">
+        {holdlederAttention}
+      </span>
+    ) : null;
 
   function closeDetails(ref: React.RefObject<HTMLDetailsElement | null>) {
     const el = ref.current;
@@ -102,7 +194,10 @@ export default function TopNav({
 
             {user?.canAccessTurnering ? (
               <Link className="hover:underline" href="/turnering">
-                Turnering
+                <span className="inline-flex items-center">
+                  Turnering
+                  {turneringBadge}
+                </span>
               </Link>
             ) : null}
 
@@ -114,7 +209,25 @@ export default function TopNav({
 
             {user?.canAccessHoldleder ? (
               <Link className="hover:underline" href={`/holdleder${filtersSuffix}`}>
-                Holdleder
+                <span className="inline-flex items-center">
+                  Holdleder
+                  {holdlederBadge}
+                </span>
+              </Link>
+            ) : null}
+
+            {user?.canAccessDommerpaasaetter ? (
+              <Link className="hover:underline" href="/dommerpaasaetter">
+                <span className="inline-flex items-center">
+                  Dommerpåsætter
+                  {dommerpaasaetterBadge}
+                </span>
+              </Link>
+            ) : null}
+
+            {user?.canAccessDommer ? (
+              <Link className="hover:underline" href="/dommer">
+                Dommer
               </Link>
             ) : null}
           </nav>
@@ -174,7 +287,10 @@ export default function TopNav({
                     href="/turnering"
                     onClick={() => closeDetails(mobileMenuRef)}
                   >
-                    Turnering
+                    <span className="inline-flex items-center">
+                      Turnering
+                      {turneringBadge}
+                    </span>
                   </Link>
                 ) : null}
 
@@ -194,7 +310,33 @@ export default function TopNav({
                     href={`/holdleder${filtersSuffix}`}
                     onClick={() => closeDetails(mobileMenuRef)}
                   >
-                    Holdleder
+                    <span className="inline-flex items-center">
+                      Holdleder
+                      {holdlederBadge}
+                    </span>
+                  </Link>
+                ) : null}
+
+                {user?.canAccessDommerpaasaetter ? (
+                  <Link
+                    className="rounded px-2 py-1 hover:bg-zinc-50"
+                    href="/dommerpaasaetter"
+                    onClick={() => closeDetails(mobileMenuRef)}
+                  >
+                    <span className="inline-flex items-center">
+                      Dommerpåsætter
+                      {dommerpaasaetterBadge}
+                    </span>
+                  </Link>
+                ) : null}
+
+                {user?.canAccessDommer ? (
+                  <Link
+                    className="rounded px-2 py-1 hover:bg-zinc-50"
+                    href="/dommer"
+                    onClick={() => closeDetails(mobileMenuRef)}
+                  >
+                    Dommer
                   </Link>
                 ) : null}
 

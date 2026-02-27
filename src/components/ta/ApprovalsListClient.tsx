@@ -24,12 +24,15 @@ type PendingRoleItem = {
     createdAt: string;
   };
   club: { id: string; name: string; clubNo: string | null } | null;
+  clubLeaderTitle?: string | null;
   team: {
     id: string;
     name: string;
     league: string;
     club: { id: string; name: string; clubNo: string | null };
   } | null;
+
+  referee?: { id: string; name: string; refereeNo: string; club: string | null } | null;
 };
 
 const roleLabels: Record<TaRole, string> = {
@@ -57,6 +60,15 @@ function formatDateTime(value: string) {
 function formatClubLabel(club: { name: string; clubNo: string | null }) {
   const no = String(club.clubNo ?? "").trim();
   return no ? `${club.name} (${no})` : club.name;
+}
+
+function formatClubLeaderTitle(value: string | null | undefined) {
+  const v = String(value ?? "").trim().toUpperCase();
+  if (!v) return "-";
+  if (v === "FORMAND") return "Formand";
+  if (v === "KASSER") return "Kassér";
+  if (v === "BESTYRELSESMEDLEM") return "Bestyrelsesmedlem";
+  return v;
 }
 
 export default function ApprovalsListClient({
@@ -157,7 +169,7 @@ export default function ApprovalsListClient({
 
               const targetText =
                 item.role === "CLUB_LEADER" && item.club
-                  ? `Klub: ${formatClubLabel(item.club)}`
+                  ? `Klub: ${formatClubLabel(item.club)} · Rolle: ${formatClubLeaderTitle(item.clubLeaderTitle)}`
                   : item.role === "TEAM_LEADER"
                     ? item.team
                       ? `Hold: ${item.team.name} · ${item.team.league} · ${formatClubLabel(item.team.club)}`
@@ -166,6 +178,10 @@ export default function ApprovalsListClient({
                       ? item.club
                         ? `Klub: ${formatClubLabel(item.club)}`
                         : "Klub: (mangler)"
+                      : item.role === "REFEREE"
+                        ? item.referee
+                          ? `Dommer: ${item.referee.name} (${item.referee.refereeNo})${item.referee.club ? ` · ${item.referee.club}` : ""}`
+                          : "Dommer: (mangler)"
                       : "";
 
               return (

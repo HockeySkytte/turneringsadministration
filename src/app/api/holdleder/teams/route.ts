@@ -1,14 +1,25 @@
 import { NextResponse } from "next/server";
 import { getAppContext } from "@/lib/appContext";
 import { prisma } from "@/lib/prisma";
+import { ensureTurneringDomainTables } from "@/lib/turnering/db";
 
 export const dynamic = "force-dynamic";
+
+async function getCurrentSeasonStartYearFromTaTeams(): Promise<number | null> {
+  const agg = await prisma.taTeam.aggregate({ _max: { seasonStartYear: true } });
+  const y = agg._max.seasonStartYear;
+  return typeof y === "number" && Number.isFinite(y) ? y : null;
+}
 
 export async function GET() {
   const { user } = await getAppContext();
   if (!user?.hasApprovedRole) {
     return NextResponse.json({ ok: false, error: "NOT_AUTHENTICATED" }, { status: 401 });
   }
+
+  await ensureTurneringDomainTables();
+
+  const currentSeasonStartYear = await getCurrentSeasonStartYearFromTaTeams();
 
   const approvedLeaderRoles = user.roles.filter(
     (r) => r.status === "APPROVED" && r.role === "TEAM_LEADER"
@@ -38,6 +49,7 @@ export async function GET() {
 
   const teams = await prisma.taTeam.findMany({
     where: {
+      ...(currentSeasonStartYear ? { seasonStartYear: currentSeasonStartYear } : null),
       OR: [
         directTeamIds.length ? { id: { in: directTeamIds } } : undefined,
         allowedHoldIds.length ? { holdId: { in: allowedHoldIds } } : undefined,

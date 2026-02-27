@@ -21,6 +21,8 @@ export default async function AppLayout({
   const canAccessTurnering = Boolean(user?.isTournamentAdmin);
   const canAccessKlubleder = Boolean(user?.isClubLeader);
   const canAccessHoldleder = Boolean(user?.isTeamLeader);
+  const canAccessDommerpaasaetter = Boolean(user?.isRefAdmin);
+  const canAccessDommer = Boolean(user?.isReferee);
   const displayUsername = user ? (user.isAdmin ? "admin" : user.username) : null;
 
   const {
@@ -74,6 +76,8 @@ export default async function AppLayout({
                     canAccessTurnering,
                     canAccessKlubleder,
                     canAccessHoldleder,
+                    canAccessDommerpaasaetter,
+                    canAccessDommer,
                   }
                 : null
             }
@@ -86,6 +90,8 @@ export default async function AppLayout({
           canAccessTurnering={canAccessTurnering}
           canAccessKlubleder={canAccessKlubleder}
           canAccessHoldleder={canAccessHoldleder}
+          canAccessDommerpaasaetter={canAccessDommerpaasaetter}
+          canAccessDommer={canAccessDommer}
           viewMode={viewMode}
           seasons={seasons}
           selectedSeasonStartYear={selectedSeasonStartYear}

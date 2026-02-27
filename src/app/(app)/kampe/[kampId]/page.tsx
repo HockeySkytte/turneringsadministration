@@ -8,8 +8,9 @@ import MatchStatsServer from "./MatchStatsServer";
 import MatchHoldlisteTab from "./MatchHoldlisteTab";
 import MatchDeleteTabClient from "./MatchDeleteTabClient";
 import MatchEditTabClient from "./MatchEditTabClient";
+import MatchKommentarerTabClient from "./MatchKommentarerTabClient";
 
-type Tab = "report" | "stats" | "secretariat" | "holdliste" | "edit" | "delete";
+type Tab = "report" | "stats" | "secretariat" | "holdliste" | "comments" | "edit" | "delete";
 
 type MatchStatus = "open" | "live" | "closed";
 
@@ -83,6 +84,7 @@ function parseTab(searchParams?: Record<string, string | string[] | undefined>):
   if (tab === "stats") return "stats";
   if (tab === "secretariat") return "secretariat";
   if (tab === "holdliste") return "holdliste";
+  if (tab === "comments") return "comments";
   if (tab === "edit") return "edit";
   if (tab === "delete") return "delete";
   return "report";
@@ -208,6 +210,7 @@ export default async function KampPage({
 
   const homeClubId = homeTeamRecord?.clubId ?? null;
   const homeTeamId = homeTeamRecord?.id ?? null;
+  const awayClubId = awayTeamRecord?.clubId ?? null;
   const awayTeamId = awayTeamRecord?.id ?? null;
 
   const isHomeSecretariat =
@@ -227,6 +230,15 @@ export default async function KampPage({
         r.role === "TEAM_LEADER" &&
         ((r.teamId != null && (r.teamId === homeTeamId || r.teamId === awayTeamId)) ||
           (r.holdId != null && (r.holdId === homeHoldId || r.holdId === awayHoldId))),
+    );
+
+  const isClubLeaderForMatch =
+    !!user?.roles?.some(
+      (r) =>
+        r.status === "APPROVED" &&
+        r.role === "CLUB_LEADER" &&
+        r.clubId != null &&
+        (r.clubId === homeClubId || r.clubId === awayClubId),
     );
 
   const pickTeams: Array<{ teamId: string; label: string }> = [];
@@ -296,6 +308,23 @@ export default async function KampPage({
   const dommer2Name = String(taMatch.dommer2 ?? "").trim();
   const dommer2Id = String(taMatch.dommer2Id ?? "").trim();
 
+  const actorRefereeId =
+    user?.isReferee
+      ? String(user.roles?.find((r) => r.status === "APPROVED" && r.role === "REFEREE" && r.refereeId)?.refereeId ?? "").trim() ||
+        null
+      : null;
+
+  const actorRefereeNo = actorRefereeId
+    ? ((await prisma.taReferee.findUnique({ where: { id: actorRefereeId }, select: { refereeNo: true } }))?.refereeNo ?? null)
+    : null;
+
+  const isAssignedReferee = Boolean(
+    (actorRefereeNo && (dommer1Id === actorRefereeNo || dommer2Id === actorRefereeNo)) ||
+      (actorRefereeId && (dommer1Id === actorRefereeId || dommer2Id === actorRefereeId))
+  );
+  const isAdminLike = Boolean(user?.isAdmin || user?.isTournamentAdmin || user?.isRefAdmin);
+  const showCommentsTab = Boolean(isTeamLeaderForMatch || isClubLeaderForMatch || isAssignedReferee || isAdminLike);
+
   const formatDommer = (name: string, no: string) => {
     if (name && no) return `${name} (${no})`;
     return name || no;
@@ -358,6 +387,19 @@ export default async function KampPage({
             }
           >
             Holdliste
+          </Link>
+        ) : null}
+
+        {showCommentsTab ? (
+          <Link
+            href={{ pathname: `/kamp/${kampId}`, query: { tab: "comments" } }}
+            className={
+              effectiveTab === "comments"
+                ? "rounded-md bg-[color:var(--brand)] px-3 py-1.5 text-sm font-semibold text-[var(--brand-foreground)]"
+                : "rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm font-semibold text-zinc-900"
+            }
+          >
+            Kommentarer
           </Link>
         ) : null}
 
@@ -436,6 +478,14 @@ export default async function KampPage({
           ) : (
             <div className="rounded-xl border border-zinc-200 bg-white p-4 text-sm text-zinc-700">
               Du har ikke adgang til holdlisten for denne kamp.
+            </div>
+          )
+        ) : effectiveTab === "comments" ? (
+          showCommentsTab ? (
+            <MatchKommentarerTabClient kampId={kampId} />
+          ) : (
+            <div className="rounded-xl border border-zinc-200 bg-white p-4 text-sm text-zinc-700">
+              Du har ikke adgang til kommentarer for denne kamp.
             </div>
           )
         ) : effectiveTab === "edit" ? (

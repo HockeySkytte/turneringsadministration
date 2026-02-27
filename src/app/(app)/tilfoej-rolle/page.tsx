@@ -5,6 +5,16 @@ import { useRouter } from "next/navigation";
 
 type TaRole = "CLUB_LEADER" | "TEAM_LEADER" | "SECRETARIAT" | "REFEREE";
 
+type TeamGender = "MEN" | "WOMEN" | "UNKNOWN";
+
+type ClubLeaderTitle = "FORMAND" | "KASSER" | "BESTYRELSESMEDLEM";
+
+const CLUB_LEADER_TITLE_OPTIONS: Array<{ value: ClubLeaderTitle; label: string }> = [
+  { value: "FORMAND", label: "Formand" },
+  { value: "KASSER", label: "Kassér" },
+  { value: "BESTYRELSESMEDLEM", label: "Bestyrelsesmedlem" },
+];
+
 const ROLE_OPTIONS: Array<{ value: TaRole; label: string; hint: string }> = [
   {
     value: "CLUB_LEADER",
@@ -33,12 +43,20 @@ export default function AddRolePage() {
 
   const [role, setRole] = useState<TaRole>("TEAM_LEADER");
 
+  const [clubLeaderTitle, setClubLeaderTitle] = useState<ClubLeaderTitle | null>(null);
+
+  const [referees, setReferees] = useState<Array<{ id: string; name: string; refereeNo: string; club: string | null }>>(
+    []
+  );
+  const [refereeId, setRefereeId] = useState<string | null>(null);
+
   const [clubs, setClubs] = useState<Array<{ id: string; name: string; clubNo: string | null }>>(
     []
   );
   const [clubId, setClubId] = useState<string | null>(null);
   const [leagues, setLeagues] = useState<string[]>([]);
   const [league, setLeague] = useState<string | null>(null);
+  const [teamGender, setTeamGender] = useState<TeamGender | null>(null);
   const [teams, setTeams] = useState<Array<{ id: string; name: string }>>([]);
   const [teamId, setTeamId] = useState<string | null>(null);
 
@@ -52,6 +70,8 @@ export default function AddRolePage() {
 
   const needsClub = role === "CLUB_LEADER" || role === "SECRETARIAT";
   const needsTeam = role === "TEAM_LEADER";
+  const needsClubLeaderTitle = role === "CLUB_LEADER";
+  const needsReferee = role === "REFEREE";
 
   const clubOptions = useMemo(
     () =>
@@ -71,6 +91,16 @@ export default function AddRolePage() {
   const teamOptions = useMemo(
     () => teams.map((t) => ({ id: t.id, label: t.name })),
     [teams]
+  );
+
+  const refereeOptions = useMemo(
+    () =>
+      referees.map((r) => {
+        const clubLabel = String(r.club ?? "").trim();
+        const base = `${r.name} (${r.refereeNo})`;
+        return { id: r.id, label: clubLabel ? `${base} · ${clubLabel}` : base };
+      }),
+    [referees]
   );
 
   useEffect(() => {
@@ -101,10 +131,39 @@ export default function AddRolePage() {
     // Reset selections when role changes.
     setClubId(null);
     setLeague(null);
+    setTeamGender(null);
     setTeamId(null);
     setLeagues([]);
     setTeams([]);
+    setClubLeaderTitle(null);
+    setRefereeId(null);
   }, [role]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadReferees() {
+      if (!needsReferee) {
+        setReferees([]);
+        return;
+      }
+
+      const res = await fetch("/api/auth/referees", { cache: "no-store" });
+      const data = await res.json().catch(() => ({}));
+      if (cancelled) return;
+      if (res.ok && data?.ok === true && Array.isArray(data?.referees)) {
+        setReferees(
+          data.referees as Array<{ id: string; name: string; refereeNo: string; club: string | null }>
+        );
+      } else {
+        setReferees([]);
+      }
+    }
+
+    void loadReferees();
+    return () => {
+      cancelled = true;
+    };
+  }, [needsReferee]);
 
   useEffect(() => {
     let cancelled = false;
@@ -133,12 +192,12 @@ export default function AddRolePage() {
   useEffect(() => {
     let cancelled = false;
     async function loadTeams() {
-      if (!clubId || !league) {
+      if (!clubId || !league || !teamGender) {
         setTeams([]);
         return;
       }
       const res = await fetch(
-        `/api/public/turnering/teams?clubId=${encodeURIComponent(clubId)}&league=${encodeURIComponent(league)}`,
+        `/api/public/turnering/teams?clubId=${encodeURIComponent(clubId)}&league=${encodeURIComponent(league)}&gender=${encodeURIComponent(teamGender)}`,
         { cache: "no-store" }
       );
       const data = await res.json().catch(() => ({}));
@@ -153,7 +212,7 @@ export default function AddRolePage() {
     return () => {
       cancelled = true;
     };
-  }, [clubId, league]);
+  }, [clubId, league, teamGender]);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -171,6 +230,21 @@ export default function AddRolePage() {
         return;
       }
 
+      if (needsTeam && !teamGender) {
+        setError("Vælg venligst køn (Herre/Dame). ");
+        return;
+      }
+
+      if (needsClubLeaderTitle && !clubLeaderTitle) {
+        setError("Vælg venligst en rolle (Formand/Kassér/Bestyrelsesmedlem). ");
+        return;
+      }
+
+      if (needsReferee && !refereeId) {
+        setError("Vælg venligst en dommer fra dommerlisten.");
+        return;
+      }
+
       const res = await fetch("/api/auth/add-role", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -178,6 +252,8 @@ export default function AddRolePage() {
           role,
           clubId: needsClub ? clubId : null,
           teamId: needsTeam ? teamId : null,
+          clubLeaderTitle: needsClubLeaderTitle ? clubLeaderTitle : null,
+          refereeId: needsReferee ? refereeId : null,
         }),
       });
 
@@ -245,6 +321,30 @@ export default function AddRolePage() {
           />
         ) : null}
 
+        {needsClubLeaderTitle ? (
+          <div>
+            <label className="block text-sm font-medium">Rolle</label>
+            <select
+              className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2"
+              value={clubLeaderTitle ?? ""}
+              onChange={(e) => {
+                const v = String(e.target.value ?? "").trim();
+                setClubLeaderTitle(v ? (v as ClubLeaderTitle) : null);
+              }}
+              required
+            >
+              <option value="" disabled>
+                Vælg rolle…
+              </option>
+              {CLUB_LEADER_TITLE_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : null}
+
         {needsTeam ? (
           <div className="space-y-3">
             <SearchableSelect
@@ -255,6 +355,7 @@ export default function AddRolePage() {
               onChange={(id) => {
                 setClubId(id);
                 setLeague(null);
+                setTeamGender(null);
                 setTeamId(null);
               }}
               disabled={clubs.length === 0}
@@ -267,20 +368,57 @@ export default function AddRolePage() {
               valueId={league}
               onChange={(id) => {
                 setLeague(id);
+                setTeamGender(null);
                 setTeamId(null);
               }}
               disabled={!clubId || leagueOptions.length === 0}
             />
 
+            <div>
+              <label className="block text-sm font-medium">Køn</label>
+              <select
+                className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2"
+                value={teamGender ?? ""}
+                onChange={(e) => {
+                  const v = String(e.target.value ?? "").trim();
+                  setTeamGender(v ? (v as TeamGender) : null);
+                  setTeamId(null);
+                }}
+                disabled={!clubId || !league}
+                required
+              >
+                <option value="" disabled>
+                  Vælg køn…
+                </option>
+                <option value="MEN">Herre</option>
+                <option value="WOMEN">Dame</option>
+                <option value="UNKNOWN">Ikke angivet</option>
+              </select>
+              <p className="mt-1 text-xs text-zinc-600">
+                Bruges til at skelne mellem herre-/damehold i samme liga.
+              </p>
+            </div>
+
             <SearchableSelect
               label="Hold"
-              placeholder={clubId && league ? "Søg hold…" : "Vælg klub og liga først"}
+              placeholder={clubId && league ? (teamGender ? "Søg hold…" : "Vælg køn først") : "Vælg klub og liga først"}
               options={teamOptions}
               valueId={teamId}
               onChange={(id) => setTeamId(id)}
-              disabled={!clubId || !league || teamOptions.length === 0}
+              disabled={!clubId || !league || !teamGender || teamOptions.length === 0}
             />
           </div>
+        ) : null}
+
+        {needsReferee ? (
+          <SearchableSelect
+            label="Dommer"
+            placeholder="Søg dommer…"
+            options={refereeOptions}
+            valueId={refereeId}
+            onChange={(id) => setRefereeId(id)}
+            disabled={refereeOptions.length === 0}
+          />
         ) : null}
 
         {error ? <p className="text-sm text-red-600">{error}</p> : null}

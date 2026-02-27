@@ -17,8 +17,17 @@ export async function PATCH(
   const body = await req.json().catch(() => null);
 
   const clubId = String(body?.clubId ?? "").trim() || null;
+  const clubLeaderTitleRaw = String(body?.clubLeaderTitle ?? "").trim() || null;
   if (!clubId) {
     return NextResponse.json({ message: "Vælg en klub." }, { status: 400 });
+  }
+
+  const clubLeaderTitle = clubLeaderTitleRaw ? clubLeaderTitleRaw.toUpperCase() : null;
+  if (!clubLeaderTitle || !["FORMAND", "KASSER", "BESTYRELSESMEDLEM"].includes(clubLeaderTitle)) {
+    return NextResponse.json(
+      { message: "Vælg en rolle (Formand/Kassér/Bestyrelsesmedlem)." },
+      { status: 400 }
+    );
   }
 
   const assignment = await (prisma as any).taUserRole.findUnique({
@@ -37,7 +46,7 @@ export async function PATCH(
 
   await (prisma as any).taUserRole.update({
     where: { id: assignment.id },
-    data: { clubId, teamId: null },
+    data: { clubId, teamId: null, clubLeaderTitle },
   });
 
   return NextResponse.json({ ok: true });

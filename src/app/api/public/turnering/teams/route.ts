@@ -11,16 +11,27 @@ export async function GET(req: Request) {
   const url = new URL(req.url);
   const clubId = String(url.searchParams.get("clubId") ?? "").trim();
   const league = String(url.searchParams.get("league") ?? "").trim();
+  const genderRaw = String(url.searchParams.get("gender") ?? "").trim().toUpperCase();
+  const gender: "MEN" | "WOMEN" | "UNKNOWN" | "" =
+    genderRaw === "MEN" || genderRaw === "WOMEN" || genderRaw === "UNKNOWN" ? (genderRaw as any) : "";
 
   if (!clubId || !league) {
     return NextResponse.json({ ok: true, teams: [] });
   }
+
+  const genderSql =
+    gender === "MEN" || gender === "WOMEN"
+      ? Prisma.sql`AND gender = ${gender}`
+      : gender === "UNKNOWN"
+        ? Prisma.sql`AND (gender IS NULL OR TRIM(gender) = '')`
+        : Prisma.sql``;
 
   const teamsRaw = await prisma.$queryRaw<Array<{ id: string; name: string; holdId: string | null }>>(
     Prisma.sql`
       SELECT id, name, "holdId"
       FROM ta_teams
       WHERE "clubId" = ${clubId} AND league = ${league}
+      ${genderSql}
       ORDER BY name ASC
     `
   );

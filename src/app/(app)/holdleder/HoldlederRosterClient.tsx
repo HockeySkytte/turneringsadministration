@@ -4,14 +4,24 @@ import { useEffect, useMemo, useState } from "react";
 
 type TeamOption = { id: string; league: string; name: string; clubId: string };
 
+type LicensedPlayer = {
+  id: string;
+  licenseNumber: number;
+  name: string;
+  birthDate: string;
+};
+
 type RosterPlayer = {
   number: string;
+  role: "" | "C" | "G";
+  licenseId: string;
   name: string;
   birthDate: string;
   imageUrl: string;
 };
 
 type RosterLeader = {
+  role: "" | "Træner" | "Assistentræner" | "Holdleder";
   name: string;
   imageUrl: string;
 };
@@ -21,8 +31,15 @@ type RosterDto = {
   teamId: string;
   league: string;
   teamName: string;
-  players: Array<{ number: string | null; name: string; birthDate: string | null; imageUrl: string | null }>;
-  leaders: Array<{ name: string; imageUrl: string | null }>;
+  players: Array<{
+    number: string | null;
+    role: string | null;
+    licenseId?: string | null;
+    name: string;
+    birthDate: string | null;
+    imageUrl: string | null;
+  }>;
+  leaders: Array<{ role: string | null; name: string; imageUrl: string | null }>;
 };
 
 function normalizeText(v: unknown) {
@@ -65,8 +82,18 @@ export default function HoldlederRosterClient() {
   const [players, setPlayers] = useState<RosterPlayer[]>([]);
   const [leaders, setLeaders] = useState<RosterLeader[]>([]);
 
-  const [newPlayer, setNewPlayer] = useState<RosterPlayer>({ number: "", name: "", birthDate: "", imageUrl: "" });
-  const [newLeader, setNewLeader] = useState<RosterLeader>({ name: "", imageUrl: "" });
+  const [licensedPlayers, setLicensedPlayers] = useState<LicensedPlayer[]>([]);
+  const [loadingLicensedPlayers, setLoadingLicensedPlayers] = useState(false);
+
+  const [newPlayer, setNewPlayer] = useState<RosterPlayer>({
+    number: "",
+    role: "",
+    licenseId: "",
+    name: "",
+    birthDate: "",
+    imageUrl: "",
+  });
+  const [newLeader, setNewLeader] = useState<RosterLeader>({ role: "", name: "", imageUrl: "" });
 
   const [editingPlayerIndex, setEditingPlayerIndex] = useState<number | null>(null);
   const [editingPlayerDraft, setEditingPlayerDraft] = useState<RosterPlayer | null>(null);
@@ -97,6 +124,51 @@ export default function HoldlederRosterClient() {
     [teams, selectedTeamId],
   );
 
+  const selectedLicensedPlayer = useMemo(() => {
+    if (!newPlayer.licenseId) return null;
+    return licensedPlayers.find((p) => p.id === newPlayer.licenseId) ?? null;
+  }, [licensedPlayers, newPlayer.licenseId]);
+
+  useEffect(() => {
+    if (!selectedTeamId) return;
+    let cancelled = false;
+
+    async function loadLicensedPlayers() {
+      setLoadingLicensedPlayers(true);
+      try {
+        const res = await fetch(`/api/holdleder/player-licenses?teamId=${encodeURIComponent(selectedTeamId)}`, {
+          cache: "no-store",
+        });
+        const json = (await res.json().catch(() => null)) as any;
+        if (cancelled) return;
+
+        const list = (json?.items ?? []) as Array<{ id: string; licenseNumber: number; name: string; birthDate: string }>;
+        setLicensedPlayers(list);
+
+        // Keep selection if still present, else default to first.
+        setNewPlayer((p) => {
+          const current = p.licenseId;
+          const stillThere = current && list.some((x) => x.id === current);
+          const nextId = stillThere ? current : list[0]?.id ?? "";
+          const next = list.find((x) => x.id === nextId) ?? null;
+          return {
+            ...p,
+            licenseId: nextId,
+            name: next?.name ?? "",
+            birthDate: toDanishDateValue(next?.birthDate ?? null),
+          };
+        });
+      } finally {
+        if (!cancelled) setLoadingLicensedPlayers(false);
+      }
+    }
+
+    void loadLicensedPlayers();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedTeamId]);
+
   useEffect(() => {
     if (!selectedTeamId) return;
     let cancelled = false;
@@ -123,12 +195,23 @@ export default function HoldlederRosterClient() {
         setPlayers(
           (roster.players ?? []).map((p) => ({
             number: normalizeText(p.number) ?? "",
+            role: (normalizeText(p.role) as any) === "C" || (normalizeText(p.role) as any) === "G" ? (normalizeText(p.role) as any) : "",
+            licenseId: normalizeText(p.licenseId ?? ""),
             name: normalizeText(p.name),
             birthDate: toDanishDateValue(p.birthDate),
             imageUrl: normalizeText(p.imageUrl) ?? "",
           })),
         );
-        setLeaders((roster.leaders ?? []).map((l) => ({ name: normalizeText(l.name), imageUrl: normalizeText(l.imageUrl) ?? "" })));
+        setLeaders(
+          (roster.leaders ?? []).map((l) => ({
+            role:
+              normalizeText(l.role) === "Træner" || normalizeText(l.role) === "Assistentræner" || normalizeText(l.role) === "Holdleder"
+                ? (normalizeText(l.role) as any)
+                : "",
+            name: normalizeText(l.name),
+            imageUrl: normalizeText(l.imageUrl) ?? "",
+          })),
+        );
         setEditingPlayerIndex(null);
         setEditingPlayerDraft(null);
         setEditingLeaderIndex(null);
@@ -145,18 +228,58 @@ export default function HoldlederRosterClient() {
     };
   }, [selectedTeamId, selectedTeam]);
 
+  useEffect(() => {
+    if (!licensedPlayers.length) return;
+    // Backfill licenseId on loaded players when possible (for older rosters).
+    setPlayers((prev) =>
+      prev.map((p) => {
+        if (p.licenseId) return p;
+        const keyName = normalizeText(p.name).toLowerCase();
+        const keyBirth = normalizeText(p.birthDate);
+        const match = licensedPlayers.find(
+          (lp) => normalizeText(lp.name).toLowerCase() === keyName && toDanishDateValue(lp.birthDate) === keyBirth,
+        );
+        return match ? { ...p, licenseId: match.id } : p;
+      }),
+    );
+  }, [licensedPlayers]);
+
   function addPlayer() {
-    const name = normalizeText(newPlayer.name);
-    if (!name) {
-      setStatus("Udfyld mindst navn for spiller.");
+    if (!newPlayer.licenseId || !selectedLicensedPlayer) {
+      setStatus("Vælg en spiller fra licenslisten.");
       return;
     }
-    if (!isValidDanishDate(newPlayer.birthDate)) {
-      setStatus("Født skal have format: dd-mm-åååå");
+
+    if (players.some((p) => p.licenseId && p.licenseId === newPlayer.licenseId)) {
+      setStatus("Den samme spiller/licens kan ikke tilføjes flere gange på samme hold.");
       return;
     }
-    setPlayers((prev) => [...prev, { ...newPlayer, name }]);
-    setNewPlayer({ number: "", name: "", birthDate: "", imageUrl: "" });
+
+    const name = normalizeText(selectedLicensedPlayer.name);
+    const birthDate = toDanishDateValue(selectedLicensedPlayer.birthDate);
+    if (!name || !birthDate) {
+      setStatus("Kunne ikke læse spillerdata fra licens.");
+      return;
+    }
+
+    setPlayers((prev) => [
+      ...prev,
+      {
+        number: newPlayer.number,
+        role: newPlayer.role,
+        licenseId: newPlayer.licenseId,
+        name,
+        birthDate,
+        imageUrl: newPlayer.imageUrl,
+      },
+    ]);
+
+    setNewPlayer((p) => ({
+      ...p,
+      number: "",
+      role: "",
+      imageUrl: "",
+    }));
   }
 
   function addLeader() {
@@ -166,7 +289,7 @@ export default function HoldlederRosterClient() {
       return;
     }
     setLeaders((prev) => [...prev, { ...newLeader, name }]);
-    setNewLeader({ name: "", imageUrl: "" });
+    setNewLeader({ role: "", name: "", imageUrl: "" });
   }
 
   async function saveRoster() {
@@ -174,12 +297,6 @@ export default function HoldlederRosterClient() {
     setSaving(true);
     setStatus("");
     try {
-      const invalidBirth = players.find((p) => !isValidDanishDate(p.birthDate));
-      if (invalidBirth) {
-        setStatus("Født skal have format: dd-mm-åååå");
-        return;
-      }
-
       const res = await fetch("/api/holdleder/roster", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -202,12 +319,23 @@ export default function HoldlederRosterClient() {
         setPlayers(
           (roster.players ?? []).map((p) => ({
             number: normalizeText(p.number) ?? "",
+            role: (normalizeText(p.role) as any) === "C" || (normalizeText(p.role) as any) === "G" ? (normalizeText(p.role) as any) : "",
+            licenseId: "",
             name: normalizeText(p.name),
             birthDate: toDanishDateValue(p.birthDate),
             imageUrl: normalizeText(p.imageUrl) ?? "",
           })),
         );
-        setLeaders((roster.leaders ?? []).map((l) => ({ name: normalizeText(l.name), imageUrl: normalizeText(l.imageUrl) ?? "" })));
+        setLeaders(
+          (roster.leaders ?? []).map((l) => ({
+            role:
+              normalizeText(l.role) === "Træner" || normalizeText(l.role) === "Assistentræner" || normalizeText(l.role) === "Holdleder"
+                ? (normalizeText(l.role) as any)
+                : "",
+            name: normalizeText(l.name),
+            imageUrl: normalizeText(l.imageUrl) ?? "",
+          })),
+        );
       }
 
       setEditingPlayerIndex(null);
@@ -260,16 +388,7 @@ export default function HoldlederRosterClient() {
 
   function commitEditPlayer() {
     if (editingPlayerIndex === null || !editingPlayerDraft) return;
-    const name = normalizeText(editingPlayerDraft.name);
-    if (!name) {
-      setStatus("Udfyld mindst navn for spiller.");
-      return;
-    }
-    if (!isValidDanishDate(editingPlayerDraft.birthDate)) {
-      setStatus("Født skal have format: dd-mm-åååå");
-      return;
-    }
-    setPlayers((prev) => prev.map((p, i) => (i === editingPlayerIndex ? { ...editingPlayerDraft, name } : p)));
+    setPlayers((prev) => prev.map((p, i) => (i === editingPlayerIndex ? { ...p, ...editingPlayerDraft } : p)));
     cancelEditPlayer();
   }
 
@@ -360,19 +479,35 @@ export default function HoldlederRosterClient() {
                 value={newPlayer.number}
                 onChange={(e) => setNewPlayer((p) => ({ ...p, number: e.target.value }))}
               />
-              <input
-                className="col-span-9 rounded-md border border-zinc-300 px-2 py-2 text-sm"
-                placeholder="Navn"
-                value={newPlayer.name}
-                onChange={(e) => setNewPlayer((p) => ({ ...p, name: e.target.value }))}
-              />
+              <select
+                className="col-span-9 rounded-md border border-zinc-300 bg-white px-2 py-2 text-sm"
+                value={newPlayer.licenseId}
+                onChange={(e) => {
+                  const id = e.target.value;
+                  const lp = licensedPlayers.find((x) => x.id === id) ?? null;
+                  setNewPlayer((p) => ({
+                    ...p,
+                    licenseId: id,
+                    name: lp?.name ?? "",
+                    birthDate: toDanishDateValue(lp?.birthDate ?? null),
+                  }));
+                }}
+                disabled={loadingLicensedPlayers || licensedPlayers.length === 0}
+              >
+                {licensedPlayers.length === 0 ? <option value="">Ingen licenser</option> : null}
+                {licensedPlayers.map((lp) => (
+                  <option key={lp.id} value={lp.id}>
+                    {lp.name} (#{lp.licenseNumber})
+                  </option>
+                ))}
+              </select>
             </div>
             <div className="grid grid-cols-12 gap-2">
               <input
-                className="col-span-5 rounded-md border border-zinc-300 px-2 py-2 text-sm"
-                placeholder="dd-mm-åååå"
+                className="col-span-5 rounded-md border border-zinc-300 bg-zinc-50 px-2 py-2 text-sm"
+                placeholder="Født"
                 value={newPlayer.birthDate}
-                onChange={(e) => setNewPlayer((p) => ({ ...p, birthDate: e.target.value }))}
+                disabled
               />
               <input
                 className="col-span-7 rounded-md border border-zinc-300 px-2 py-2 text-sm"
@@ -380,6 +515,20 @@ export default function HoldlederRosterClient() {
                 value={newPlayer.imageUrl}
                 onChange={(e) => setNewPlayer((p) => ({ ...p, imageUrl: e.target.value }))}
               />
+            </div>
+            <div className="grid grid-cols-12 gap-2">
+              <select
+                className="col-span-5 rounded-md border border-zinc-300 bg-white px-2 py-2 text-sm"
+                value={newPlayer.role}
+                onChange={(e) => setNewPlayer((p) => ({ ...p, role: e.target.value as any }))}
+              >
+                <option value="">Rolle (ingen)</option>
+                <option value="C">C</option>
+                <option value="G">G</option>
+              </select>
+              <div className="col-span-7 text-xs text-zinc-500 flex items-center">
+                Vælg spiller fra licenslisten. Født udfyldes automatisk.
+              </div>
             </div>
             <button
               type="button"
@@ -397,6 +546,7 @@ export default function HoldlederRosterClient() {
                   <th className="border-b border-zinc-200 px-3 py-2 text-left text-xs font-semibold text-zinc-700">Nr</th>
                   <th className="border-b border-zinc-200 px-3 py-2 text-left text-xs font-semibold text-zinc-700">Navn</th>
                   <th className="border-b border-zinc-200 px-3 py-2 text-left text-xs font-semibold text-zinc-700">Født</th>
+                  <th className="border-b border-zinc-200 px-3 py-2 text-left text-xs font-semibold text-zinc-700">Rolle</th>
                   <th className="border-b border-zinc-200 px-3 py-2 text-left text-xs font-semibold text-zinc-700">Billede</th>
                   <th className="border-b border-zinc-200 px-3 py-2"></th>
                 </tr>
@@ -404,7 +554,7 @@ export default function HoldlederRosterClient() {
               <tbody>
                 {players.length === 0 ? (
                   <tr>
-                    <td className="px-3 py-3 text-sm text-zinc-600" colSpan={5}>
+                    <td className="px-3 py-3 text-sm text-zinc-600" colSpan={6}>
                       Ingen spillere.
                     </td>
                   </tr>
@@ -423,26 +573,24 @@ export default function HoldlederRosterClient() {
                         )}
                       </td>
                       <td className="border-b border-zinc-100 px-3 py-2 font-medium text-zinc-900">
-                        {editingPlayerIndex === idx ? (
-                          <input
-                            className="w-full rounded-md border border-zinc-300 px-2 py-1 text-sm font-medium text-zinc-900"
-                            value={editingPlayerDraft?.name ?? ""}
-                            onChange={(e) => setEditingPlayerDraft((d) => (d ? { ...d, name: e.target.value } : d))}
-                          />
-                        ) : (
-                          p.name
-                        )}
+                        {p.name}
+                      </td>
+                      <td className="border-b border-zinc-100 px-3 py-2 text-zinc-700">
+                        {p.birthDate || "-"}
                       </td>
                       <td className="border-b border-zinc-100 px-3 py-2 text-zinc-700">
                         {editingPlayerIndex === idx ? (
-                          <input
-                            className="w-full rounded-md border border-zinc-300 px-2 py-1 text-sm"
-                            placeholder="dd-mm-åååå"
-                            value={editingPlayerDraft?.birthDate ?? ""}
-                            onChange={(e) => setEditingPlayerDraft((d) => (d ? { ...d, birthDate: e.target.value } : d))}
-                          />
+                          <select
+                            className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1 text-sm"
+                            value={editingPlayerDraft?.role ?? ""}
+                            onChange={(e) => setEditingPlayerDraft((d) => (d ? { ...d, role: e.target.value as any } : d))}
+                          >
+                            <option value="">-</option>
+                            <option value="C">C</option>
+                            <option value="G">G</option>
+                          </select>
                         ) : (
-                          p.birthDate || "-"
+                          p.role || "-"
                         )}
                       </td>
                       <td className="border-b border-zinc-100 px-3 py-2 text-zinc-700">
@@ -510,6 +658,16 @@ export default function HoldlederRosterClient() {
           <div className="text-sm font-semibold text-zinc-900">Ledere</div>
 
           <div className="mt-3 grid gap-2">
+            <select
+              className="rounded-md border border-zinc-300 bg-white px-2 py-2 text-sm"
+              value={newLeader.role}
+              onChange={(e) => setNewLeader((l) => ({ ...l, role: e.target.value as any }))}
+            >
+              <option value="">Rolle (valgfri)</option>
+              <option value="Træner">Træner</option>
+              <option value="Assistentræner">Assistentræner</option>
+              <option value="Holdleder">Holdleder</option>
+            </select>
             <input
               className="rounded-md border border-zinc-300 px-2 py-2 text-sm"
               placeholder="Navn"
@@ -535,6 +693,7 @@ export default function HoldlederRosterClient() {
             <table className="min-w-full text-sm">
               <thead className="bg-zinc-50">
                 <tr>
+                  <th className="border-b border-zinc-200 px-3 py-2 text-left text-xs font-semibold text-zinc-700">Rolle</th>
                   <th className="border-b border-zinc-200 px-3 py-2 text-left text-xs font-semibold text-zinc-700">Navn</th>
                   <th className="border-b border-zinc-200 px-3 py-2 text-left text-xs font-semibold text-zinc-700">Billede</th>
                   <th className="border-b border-zinc-200 px-3 py-2"></th>
@@ -543,13 +702,29 @@ export default function HoldlederRosterClient() {
               <tbody>
                 {leaders.length === 0 ? (
                   <tr>
-                    <td className="px-3 py-3 text-sm text-zinc-600" colSpan={3}>
+                    <td className="px-3 py-3 text-sm text-zinc-600" colSpan={4}>
                       Ingen ledere.
                     </td>
                   </tr>
                 ) : (
                   leaders.map((l, idx) => (
                     <tr key={`${l.name}-${idx}`} className={idx % 2 === 0 ? "bg-white" : "bg-zinc-50/50"}>
+                      <td className="border-b border-zinc-100 px-3 py-2 text-zinc-700">
+                        {editingLeaderIndex === idx ? (
+                          <select
+                            className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1 text-sm"
+                            value={editingLeaderDraft?.role ?? ""}
+                            onChange={(e) => setEditingLeaderDraft((d) => (d ? { ...d, role: e.target.value as any } : d))}
+                          >
+                            <option value="">-</option>
+                            <option value="Træner">Træner</option>
+                            <option value="Assistentræner">Assistentræner</option>
+                            <option value="Holdleder">Holdleder</option>
+                          </select>
+                        ) : (
+                          l.role || "-"
+                        )}
+                      </td>
                       <td className="border-b border-zinc-100 px-3 py-2 font-medium text-zinc-900">
                         {editingLeaderIndex === idx ? (
                           <input

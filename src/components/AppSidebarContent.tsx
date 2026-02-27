@@ -2,20 +2,12 @@
 
 import { usePathname } from "next/navigation";
 
-import SeasonSlicer, { type SeasonOption } from "@/components/SeasonSlicer";
-import GenderSlicer from "@/components/GenderSlicer";
-import AgeGroupSlicer from "@/components/AgeGroupSlicer";
+import type { SeasonOption } from "@/components/SeasonSlicer";
 import type { AgeGroupValue } from "@/lib/ageGroups";
-import CompetitionRowSlicer, {
-  type CompetitionRowOption,
-} from "@/components/CompetitionRowSlicer";
-import CompetitionPoolSlicer, {
-  type CompetitionPoolOption,
-} from "@/components/CompetitionPoolSlicer";
-import CompetitionTeamSlicer, {
-  type CompetitionTeamOption,
-} from "@/components/CompetitionTeamSlicer";
-import CalendarModeSlicer, { type CalendarMode } from "@/components/CalendarModeSlicer";
+import type { CompetitionRowOption } from "@/components/CompetitionRowSlicer";
+import type { CompetitionPoolOption } from "@/components/CompetitionPoolSlicer";
+import type { CompetitionTeamOption } from "@/components/CompetitionTeamSlicer";
+import type { CalendarMode } from "@/components/CalendarModeSlicer";
 import StatsAggregationModeSlicer, { type StatsAggregationMode } from "@/components/StatsAggregationModeSlicer";
 import KalenderFiltersClient from "@/components/ta/KalenderFiltersClient";
 
@@ -49,16 +41,26 @@ export default function AppSidebarContent({
   statsAggregationMode: StatsAggregationMode;
 }) {
   const pathname = usePathname();
-  const hideSlicers = pathname === "/tilfoej-rolle" || pathname.startsWith("/tilfoej-rolle/") || pathname === "/indstillinger" || pathname.startsWith("/indstillinger/");
+  const hideSlicers =
+    pathname === "/tilfoej-rolle" ||
+    pathname.startsWith("/tilfoej-rolle/") ||
+    pathname === "/indstillinger" ||
+    pathname.startsWith("/indstillinger/") ||
+    pathname === "/klubleder" ||
+    pathname.startsWith("/klubleder/") ||
+    pathname === "/holdleder" ||
+    pathname.startsWith("/holdleder/") ||
+    pathname === "/dommerpaasaetter" ||
+    pathname.startsWith("/dommerpaasaetter/") ||
+    pathname === "/dommer" ||
+    pathname.startsWith("/dommer/");
   const isMatchDetailPage =
     pathname === "/kamp" ||
     pathname.startsWith("/kamp/") ||
     pathname === "/kampe" ||
     pathname.startsWith("/kampe/") ||
     pathname.startsWith("/kalender/kamp/");
-  const isKalender = pathname === "/kalender";
   const isStatistik = pathname === "/statistik";
-  const isStilling = pathname === "/stilling";
   const useTaFilters =
     pathname === "/kalender" ||
     pathname.startsWith("/kalender/") ||
@@ -101,18 +103,7 @@ export default function AppSidebarContent({
               <KalenderFiltersClient />
               {isStatistik ? <StatsAggregationModeSlicer mode={statsAggregationMode} /> : null}
             </>
-          ) : (
-            <>
-              <SeasonSlicer seasons={seasons} selectedStartYear={selectedSeasonStartYear} />
-              <GenderSlicer selectedGender={selectedGender} />
-              <AgeGroupSlicer ageGroups={ageGroups} selectedAgeGroup={selectedAgeGroup} />
-              <CompetitionRowSlicer rows={rows} selectedRowId={selectedRowId} />
-              <CompetitionPoolSlicer pools={pools} selectedPoolId={selectedPoolId} />
-              <CompetitionTeamSlicer teams={poolTeams} selectedTeamName={selectedTeamName} />
-              <CalendarModeSlicer mode={calendarMode} hasTeam={Boolean(selectedTeamName)} />
-              <StatsAggregationModeSlicer mode={statsAggregationMode} />
-            </>
-          )}
+          ) : null}
         </div>
 
       </div>

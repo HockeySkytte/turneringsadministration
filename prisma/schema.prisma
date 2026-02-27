@@ -681,6 +681,10 @@ model TaUser {
 
   name         String?
 
+  phoneNumber  String?
+
+  notificationPreferences Json?
+
   roles        TaUserRole[]
   approvedRoles TaUserRole[] @relation("TaUserRoleApprovals")
 
@@ -688,6 +692,11 @@ model TaUser {
 
   lineupApprovalsApprovedBy MatchLineupApproval[] @relation("MatchLineupApprovalApprovedBy")
   matchesStarted           MatchStart[]          @relation("MatchStartStartedBy")
+
+  matchCommentsCreated     TaMatchComment[]      @relation("TaMatchCommentCreatedBy")
+  matchMoveRequestsCreated TaMatchMoveRequest[]  @relation("TaMatchMoveRequestCreatedBy")
+  matchMoveRequestsAwayDecided TaMatchMoveRequest[] @relation("TaMatchMoveRequestAwayDecidedBy")
+  matchMoveRequestsTaDecided   TaMatchMoveRequest[] @relation("TaMatchMoveRequestTaDecidedBy")
 
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -718,6 +727,12 @@ model TaUserRole {
   // Examples: "GLOBAL", "club:<clubId>", "team:<teamId>"
   scopeKey     String       @default("GLOBAL")
 
+  // Extra metadata
+  clubLeaderTitle String?
+
+  refereeId    String?
+  referee      TaReferee?   @relation(fields: [refereeId], references: [id], onDelete: SetNull)
+
   approvedById String?
   approvedBy   TaUser?      @relation("TaUserRoleApprovals", fields: [approvedById], references: [id], onDelete: SetNull)
   approvedAt   DateTime?
@@ -728,7 +743,69 @@ model TaUserRole {
   @@unique([userId, role, scopeKey])
   @@index([role, status, createdAt])
   @@index([holdId])
+  @@index([refereeId])
   @@map("ta_user_roles")
+}
+
+model TaReferee {
+  id            String   @id @default(cuid())
+
+  refereeNo     String   @unique
+  name          String
+
+  club          String?
+  address       String?
+  lat           Float?
+  lng           Float?
+  geocodedAt    DateTime?
+  email         String?
+  phone         String?
+
+  partner1      String?
+  partner2      String?
+  partner3      String?
+
+  // [{ league: string, gender: string | null, seasonStartYear?: number }]
+  eligibleLeagues Json?
+
+  roles         TaUserRole[]
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("ta_referees")
+}
+
+model TaVenue {
+  key       String   @id
+  name      String
+  address   String?
+  geocodeQuery String?
+  lat       Float?
+  lng       Float?
+  geocodedAt DateTime?
+
+  matches   TaMatch[]
+  clubs     TaVenueClub[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("ta_venues")
+}
+
+model TaVenueClub {
+  venueKey  String
+  venue     TaVenue @relation(fields: [venueKey], references: [key], onDelete: Cascade)
+
+  clubId    String
+  club      TaClub @relation(fields: [clubId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@id([venueKey, clubId])
+  @@map("ta_venue_clubs")
 }
 
 // ----------------------------
@@ -742,11 +819,38 @@ model TaClub {
 
   teams     TaTeam[]
   roles     TaUserRole[]
+  venues    TaVenueClub[]
+
+  playerLicenses       TaPlayerLicense[]
+  doublePlayerLicenses TaPlayerLicense[] @relation("TaPlayerLicenseDoubleClub")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@map("ta_clubs")
+}
+
+model TaPlayerLicense {
+  id                 String   @id @default(cuid())
+  licenseNumber      Int      @unique
+
+  name               String
+  birthDate          DateTime @db.Date
+  gender             Gender
+
+  clubId             String
+  club               TaClub   @relation(fields: [clubId], references: [id], onDelete: Restrict)
+
+  doubleClubId       String?
+  doubleClub         TaClub?  @relation("TaPlayerLicenseDoubleClub", fields: [doubleClubId], references: [id], onDelete: SetNull)
+  doubleClubExpiresAt DateTime? @db.Date
+
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([clubId])
+  @@index([doubleClubId])
+  @@map("ta_player_licenses")
 }
 
 model TaTeam {
@@ -809,6 +913,8 @@ model TaRosterPlayer {
 
   rowIndex  Int
   number    String?
+  role      String?
+  licenseId String?
   name      String
   birthDate DateTime? @db.Date
   imageUrl  String?
@@ -818,6 +924,7 @@ model TaRosterPlayer {
 
   @@unique([rosterId, rowIndex])
   @@index([rosterId])
+  @@index([licenseId])
   @@map("ta_roster_players")
 }
 
@@ -828,6 +935,7 @@ model TaRosterLeader {
   roster    TaRoster @relation(fields: [rosterId], references: [id], onDelete: Cascade)
 
   rowIndex  Int
+  role      String?
   name      String
   imageUrl  String?
 
@@ -848,11 +956,17 @@ model TaMatch {
   time      DateTime? @db.Time(0)
 
   venue     String?
+  venueKey  String?
+  venueRef  TaVenue? @relation(fields: [venueKey], references: [key], onDelete: SetNull)
   result    String?
   dommer1   String?
   dommer1Id String?
+  dommer1Status String?
+  dommer1RespondedAt DateTime?
   dommer2   String?
   dommer2Id String?
+  dommer2Status String?
+  dommer2RespondedAt DateTime?
   gender    String?
   league    String?
   stage     String?
@@ -869,5 +983,133 @@ model TaMatch {
   updatedAt DateTime @updatedAt
 
   @@index([date, time])
+  @@index([venueKey])
   @@map("ta_matches")
+}
+
+model TaMatchComment {
+  id          String   @id @default(cuid())
+
+  kampId      Int
+
+  message     String
+
+  createdById String
+  createdBy   TaUser   @relation("TaMatchCommentCreatedBy", fields: [createdById], references: [id], onDelete: Cascade)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([kampId, createdAt])
+  @@index([createdById])
+  @@map("ta_match_comments")
+}
+
+model TaMatchMoveRequest {
+  id            String   @id @default(cuid())
+
+  kampId        Int
+  status        String
+
+  proposedDate  DateTime? @db.Date
+  proposedTime  DateTime? @db.Time(0)
+  note          String?
+
+  createdById   String
+  createdBy     TaUser   @relation("TaMatchMoveRequestCreatedBy", fields: [createdById], references: [id], onDelete: Cascade)
+
+  awayDecidedById String?
+  awayDecidedBy   TaUser? @relation("TaMatchMoveRequestAwayDecidedBy", fields: [awayDecidedById], references: [id], onDelete: SetNull)
+  awayDecidedAt   DateTime?
+
+  taDecidedById String?
+  taDecidedBy   TaUser? @relation("TaMatchMoveRequestTaDecidedBy", fields: [taDecidedById], references: [id], onDelete: SetNull)
+  taDecidedAt   DateTime?
+
+  rejectionReason String?
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([kampId, createdAt])
+  @@index([status])
+  @@map("ta_match_move_requests")
+}
+
+model TaRefereeAvailability {
+  id        String   @id @default(cuid())
+
+  refereeId String
+
+  // Date-only represented as a DateTime (stored as DATE in Postgres).
+  entryDate DateTime @db.Date
+
+  // AVAILABLE | UNAVAILABLE
+  status    String
+
+  // Optional time window (stored as TIME without timezone). Null = whole day.
+  startTime DateTime? @db.Time(0)
+  endTime   DateTime? @db.Time(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([entryDate])
+  @@index([refereeId, entryDate])
+  @@map("ta_referee_availability")
+}
+
+model TaRefereeAvailabilityRule {
+  id        String   @id @default(cuid())
+
+  refereeId String
+
+  // 0=Mandag ... 6=Søndag
+  weekday   Int
+
+  // AVAILABLE | UNAVAILABLE
+  status    String
+
+  // Optional time window (stored as TIME without timezone). Null = whole day.
+  startTime DateTime? @db.Time(0)
+  endTime   DateTime? @db.Time(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([refereeId, weekday])
+  @@index([refereeId])
+  @@map("ta_referee_availability_rules")
+}
+
+model TaPlayerLicenseRequest {
+  id String @id @default(cuid())
+
+  type   String
+  status String
+
+  fromClubId   String?
+  targetClubId String?
+
+  licenseId String?
+  payload   Json
+
+  createdById String
+
+  otherClubDecidedById String?
+  otherClubDecidedAt   DateTime?
+
+  taDecidedById String?
+  taDecidedAt   DateTime?
+
+  rejectionReason String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([fromClubId])
+  @@index([targetClubId])
+  @@index([createdAt])
+  @@map("ta_player_license_requests")
 }

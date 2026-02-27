@@ -10,6 +10,7 @@ type ClubLeaderItem = {
   role: "CLUB_LEADER";
   status: "PENDING" | "APPROVED" | "REJECTED";
   createdAt: string;
+  clubLeaderTitle: string | null;
   club: Club | null;
   user: {
     id: string;
@@ -19,6 +20,19 @@ type ClubLeaderItem = {
     createdAt: string;
   };
 };
+
+const CLUB_LEADER_TITLE_OPTIONS = [
+  { id: "FORMAND", label: "Formand" },
+  { id: "KASSER", label: "Kassér" },
+  { id: "BESTYRELSESMEDLEM", label: "Bestyrelsesmedlem" },
+] as const;
+
+function clubLeaderTitleLabel(value: string | null | undefined): string {
+  const v = String(value ?? "").trim().toUpperCase();
+  if (!v) return "-";
+  const found = CLUB_LEADER_TITLE_OPTIONS.find((o) => o.id === v);
+  return found?.label ?? v;
+}
 
 function formatDateTime(value: string) {
   const d = new Date(value);
@@ -59,6 +73,7 @@ export default function ClubLeadersManagementClient() {
 
   const [editing, setEditing] = useState<ClubLeaderItem | null>(null);
   const [editClubId, setEditClubId] = useState<string | null>(null);
+  const [editTitle, setEditTitle] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -115,12 +130,17 @@ export default function ClubLeadersManagementClient() {
       return;
     }
 
+    if (!editTitle) {
+      setError("Vælg venligst en rolle (Formand/Kassér/Bestyrelsesmedlem).");
+      return;
+    }
+
     setSaving(true);
     try {
       const res = await fetch(`/api/turnering/club-leaders/${encodeURIComponent(editing.id)}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ clubId: editClubId }),
+        body: JSON.stringify({ clubId: editClubId, clubLeaderTitle: editTitle }),
       });
 
       const data = await res.json().catch(() => ({}));
@@ -131,6 +151,7 @@ export default function ClubLeadersManagementClient() {
 
       setEditing(null);
       setEditClubId(null);
+      setEditTitle(null);
       await load();
     } finally {
       setSaving(false);
@@ -193,6 +214,9 @@ export default function ClubLeadersManagementClient() {
                       <div className="mt-1 text-sm text-zinc-700">
                         Klub: {item.club ? formatClubLabel(item.club) : "(mangler)"}
                       </div>
+                      <div className="mt-1 text-sm text-zinc-700">
+                        Rolle: {clubLeaderTitleLabel(item.clubLeaderTitle)}
+                      </div>
                       <div className="mt-1 text-xs text-zinc-500">Oprettet: {formatDateTime(item.createdAt)}</div>
                     </div>
 
@@ -203,6 +227,7 @@ export default function ClubLeadersManagementClient() {
                         onClick={() => {
                           setEditing(item);
                           setEditClubId(item.club?.id ?? null);
+                          setEditTitle(item.clubLeaderTitle ?? null);
                         }}
                         className="rounded-lg bg-zinc-200 px-3 py-2 text-sm font-semibold text-zinc-900 hover:bg-zinc-300 disabled:opacity-50"
                       >
@@ -239,6 +264,7 @@ export default function ClubLeadersManagementClient() {
                   if (saving) return;
                   setEditing(null);
                   setEditClubId(null);
+                  setEditTitle(null);
                 }}
                 className="rounded-lg bg-zinc-200 px-3 py-2 text-sm font-semibold text-zinc-900 hover:bg-zinc-300"
               >
@@ -255,6 +281,25 @@ export default function ClubLeadersManagementClient() {
                 onChange={(id) => setEditClubId(id)}
                 disabled={clubOptions.length === 0}
               />
+            </div>
+
+            <div className="mt-4">
+              <label className="block text-sm font-medium">Rolle</label>
+              <select
+                className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2"
+                value={editTitle ?? ""}
+                onChange={(e) => setEditTitle(e.target.value || null)}
+                required
+              >
+                <option value="" disabled>
+                  Vælg rolle…
+                </option>
+                {CLUB_LEADER_TITLE_OPTIONS.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
             </div>
 
             <div className="mt-4 flex items-center justify-end gap-2">

@@ -29,6 +29,10 @@ function canonicalKey(value: unknown): string {
     .trim();
 }
 
+function venueKeyFromName(value: unknown): string {
+  return canonicalKey(value);
+}
+
 function looseTeamKey(value: unknown): string {
   const key = canonicalKey(value);
   if (!key) return "";
@@ -433,6 +437,7 @@ export async function POST() {
         date: Date | null;
         time: Date | null;
         venue: string | null;
+        venueKey: string | null;
         result: string | null;
         dommer1: string | null;
         dommer1Id: string | null;
@@ -466,6 +471,7 @@ export async function POST() {
         date: m.date,
         time: m.time,
         venue: m.venue || null,
+        venueKey: m.venue ? venueKeyFromName(m.venue) : null,
         result: m.result || null,
         dommer1: m.dommer1 ? m.dommer1 : null,
         dommer1Id: m.dommer1Id ? m.dommer1Id : null,

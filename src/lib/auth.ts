@@ -2,13 +2,21 @@ import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/session";
 
 import { TaRole, TaRoleStatus } from "@prisma/client";
-import { ensureTaUserRoleMetadataColumns } from "@/lib/turnering/db";
+import {
+  ensureTaUserContactColumns,
+  ensureTaUserNotificationPreferenceColumns,
+  ensureTaUserRoleMetadataColumns,
+} from "@/lib/turnering/db";
 
 let ensureTaRoleColumnsOncePromise: Promise<void> | null = null;
 
 async function ensureTaRoleColumnsOnce() {
   if (!ensureTaRoleColumnsOncePromise) {
-    ensureTaRoleColumnsOncePromise = ensureTaUserRoleMetadataColumns().catch((err) => {
+    ensureTaRoleColumnsOncePromise = Promise.all([
+      ensureTaUserRoleMetadataColumns(),
+      ensureTaUserContactColumns(),
+      ensureTaUserNotificationPreferenceColumns(),
+    ]).then(() => undefined).catch((err) => {
       // If this fails, continue and let Prisma throw a clearer DB error.
       ensureTaRoleColumnsOncePromise = null;
       throw err;

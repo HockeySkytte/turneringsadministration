@@ -12,6 +12,12 @@ function parseRole(value: unknown): TaRole | null {
   return (Object.values(TaRole) as string[]).includes(v) ? (v as TaRole) : null;
 }
 
+function parseClubLeaderTitle(value: unknown): string | null {
+  const v = String(value ?? "").trim().toUpperCase();
+  if (!v) return null;
+  return ["FORMAND", "KASSER", "BESTYRELSESMEDLEM"].includes(v) ? v : null;
+}
+
 export async function POST(req: Request) {
   const body = await req.json().catch(() => null);
 
@@ -23,6 +29,8 @@ export async function POST(req: Request) {
 
   const clubId = String(body?.clubId ?? "").trim() || null;
   const teamId = String(body?.teamId ?? "").trim() || null;
+  const clubLeaderTitle = parseClubLeaderTitle(body?.clubLeaderTitle);
+  const refereeId = String(body?.refereeId ?? "").trim() || null;
 
   if (!role || !email || !username || !password) {
     return NextResponse.json(
@@ -72,6 +80,32 @@ export async function POST(req: Request) {
     }
   }
 
+  if (role === TaRole.CLUB_LEADER) {
+    if (!clubLeaderTitle) {
+      return NextResponse.json(
+        { message: "Vælg en rolle (Formand/Kassér/Bestyrelsesmedlem)." },
+        { status: 400 }
+      );
+    }
+  }
+
+  if (role === TaRole.REFEREE) {
+    if (!refereeId) {
+      return NextResponse.json(
+        { message: "Vælg en dommer fra dommerlisten." },
+        { status: 400 }
+      );
+    }
+
+    const referee = await prisma.taReferee.findUnique({ where: { id: refereeId }, select: { id: true } });
+    if (!referee) {
+      return NextResponse.json(
+        { message: "Den valgte dommer findes ikke i dommerlisten." },
+        { status: 400 }
+      );
+    }
+  }
+
   if (role === TaRole.TEAM_LEADER) {
     if (!teamId) {
       return NextResponse.json({ message: "Vælg et hold." }, { status: 400 });
@@ -112,6 +146,8 @@ export async function POST(req: Request) {
           clubId: role === TaRole.CLUB_LEADER || role === TaRole.SECRETARIAT ? clubId : null,
           teamId: role === TaRole.TEAM_LEADER ? teamId : null,
           holdId: role === TaRole.TEAM_LEADER ? holdId : null,
+          clubLeaderTitle: role === TaRole.CLUB_LEADER ? clubLeaderTitle : null,
+          refereeId: role === TaRole.REFEREE ? refereeId : null,
           scopeKey:
             role === TaRole.TEAM_LEADER
               ? holdId

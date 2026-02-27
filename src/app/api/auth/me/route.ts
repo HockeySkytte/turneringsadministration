@@ -17,6 +17,8 @@ export async function GET() {
       canAccessTurnering: Boolean(user.isTournamentAdmin),
       canAccessKlubleder: Boolean(user.isClubLeader),
       canAccessHoldleder: Boolean(user.isTeamLeader),
+      canAccessDommerpaasaetter: Boolean(user.isRefAdmin),
+      canAccessDommer: Boolean(user.isReferee),
     },
   });
 }

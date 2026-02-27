@@ -35,6 +35,7 @@ export async function PATCH(
       id: true,
       role: true,
       clubId: true,
+      holdId: true,
       team: { select: { id: true, clubId: true } },
     },
   });
@@ -45,7 +46,16 @@ export async function PATCH(
 
   // Ensure scope is within actor club.
   if (assignment.role === "TEAM_LEADER") {
-    const assignmentClubId = assignment.team?.clubId ?? null;
+    let assignmentClubId: string | null = assignment.team?.clubId ?? assignment.clubId ?? null;
+
+    if (!assignmentClubId && assignment.holdId) {
+      const t = await prisma.taTeam.findFirst({
+        where: { holdId: String(assignment.holdId), clubId: { in: actorClubIds } },
+        select: { clubId: true },
+      });
+      assignmentClubId = t?.clubId ?? null;
+    }
+
     if (!assignmentClubId || !actorClubIds.includes(String(assignmentClubId))) {
       return NextResponse.json({ message: "Ikke autoriseret." }, { status: 403 });
     }
@@ -105,6 +115,7 @@ export async function DELETE(
       id: true,
       role: true,
       clubId: true,
+      holdId: true,
       team: { select: { id: true, clubId: true } },
     },
   });
@@ -114,7 +125,16 @@ export async function DELETE(
   }
 
   if (assignment.role === "TEAM_LEADER") {
-    const assignmentClubId = assignment.team?.clubId ?? null;
+    let assignmentClubId: string | null = assignment.team?.clubId ?? assignment.clubId ?? null;
+
+    if (!assignmentClubId && assignment.holdId) {
+      const t = await prisma.taTeam.findFirst({
+        where: { holdId: String(assignment.holdId), clubId: { in: actorClubIds } },
+        select: { clubId: true },
+      });
+      assignmentClubId = t?.clubId ?? null;
+    }
+
     if (!assignmentClubId || !actorClubIds.includes(String(assignmentClubId))) {
       return NextResponse.json({ message: "Ikke autoriseret." }, { status: 403 });
     }

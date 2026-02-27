@@ -61,6 +61,8 @@ export async function POST(req: Request) {
       role: true,
       status: true,
       clubId: true,
+      clubLeaderTitle: true,
+      refereeId: true,
       team: {
         select: {
           id: true,
@@ -83,6 +85,26 @@ export async function POST(req: Request) {
 
   if (!canApprove(actor, assignment.role)) {
     return NextResponse.json({ message: "Ikke autoriseret." }, { status: 403 });
+  }
+
+  if (approve && assignment.role === "CLUB_LEADER") {
+    const t = String(assignment.clubLeaderTitle ?? "").trim().toUpperCase();
+    if (!t || !["FORMAND", "KASSER", "BESTYRELSESMEDLEM"].includes(t)) {
+      return NextResponse.json(
+        { message: "Klubleder-rollen mangler rollebetegnelse (Formand/Kassér/Bestyrelsesmedlem)." },
+        { status: 400 }
+      );
+    }
+  }
+
+  if (approve && assignment.role === "REFEREE") {
+    const rid = String(assignment.refereeId ?? "").trim();
+    if (!rid) {
+      return NextResponse.json(
+        { message: "Dommer-rollen mangler valg fra dommerlisten." },
+        { status: 400 }
+      );
+    }
   }
 
   // Club leaders can only approve within their own club.

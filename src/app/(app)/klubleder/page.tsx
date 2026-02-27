@@ -3,6 +3,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import KlublederGodkendClient from "./KlublederGodkendClient";
 import KlublederClubPickerClient from "./KlublederClubPickerClient";
+import KlublederSpillerlicenserClient from "./KlublederSpillerlicenserClient";
 
 export default async function KlublederPage({
   searchParams,
@@ -15,7 +16,7 @@ export default async function KlublederPage({
 
   const sp = await searchParams;
   const tabRaw = String(sp?.tab ?? "godkend");
-  const tab = tabRaw === "godkend" ? "godkend" : "godkend";
+  const tab = tabRaw === "spillerlicenser" ? "spillerlicenser" : "godkend";
 
   const clubIds = Array.from(
     new Set(
@@ -64,10 +65,23 @@ export default async function KlublederPage({
           >
             Godkend
           </a>
+
+          <a
+            href={`/klubleder?tab=spillerlicenser${clubQuery}`}
+            className={
+              "rounded-lg px-3 py-2 text-sm font-semibold " +
+              (tab === "spillerlicenser"
+                ? "bg-[color:var(--brand)] text-[var(--brand-foreground)]"
+                : "bg-zinc-200 text-zinc-800 hover:bg-zinc-300")
+            }
+          >
+            Spillerlicenser
+          </a>
         </div>
 
         <div className="mt-4 rounded-lg border border-zinc-200 bg-white p-4 text-sm text-zinc-700">
-          <KlublederGodkendClient />
+          {tab === "godkend" ? <KlublederGodkendClient /> : null}
+          {tab === "spillerlicenser" ? <KlublederSpillerlicenserClient clubId={defaultClubId} /> : null}
         </div>
       </div>
     </div>

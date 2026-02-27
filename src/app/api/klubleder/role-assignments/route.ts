@@ -27,12 +27,28 @@ export async function GET(req: Request) {
     return NextResponse.json({ ok: true, actorClubId: null, items: [] });
   }
 
+  const clubHoldIdsRows = await prisma.taTeam.findMany({
+    where: { clubId: actorClubId, holdId: { not: null } },
+    select: { holdId: true },
+  });
+  const clubHoldIds = clubHoldIdsRows
+    .map((r) => String(r.holdId ?? "").trim())
+    .filter(Boolean);
+
+  const teamLeaderWhere: any = {
+    role: "TEAM_LEADER",
+    OR: [
+      { team: { is: { clubId: actorClubId } } },
+      { clubId: actorClubId },
+      ...(clubHoldIds.length ? [{ holdId: { in: clubHoldIds } }] : []),
+    ],
+  };
+
   const items = await (prisma as any).taUserRole.findMany({
     where: {
       OR: [
         {
-          role: "TEAM_LEADER",
-          team: { is: { clubId: actorClubId } },
+          ...teamLeaderWhere,
         },
         {
           role: "SECRETARIAT",
@@ -46,6 +62,7 @@ export async function GET(req: Request) {
       role: true,
       status: true,
       createdAt: true,
+      holdId: true,
       club: { select: { id: true, name: true, clubNo: true } },
       team: {
         select: {
@@ -60,6 +77,55 @@ export async function GET(req: Request) {
       },
     },
   });
+
+  const missingTeamHoldIds: string[] = Array.from(
+    new Set(
+      (items ?? [])
+        .filter((i: any) => i?.role === "TEAM_LEADER" && !i?.team && i?.holdId)
+        .map((i: any) => String(i.holdId))
+        .filter(Boolean)
+    )
+  );
+
+  if (missingTeamHoldIds.length) {
+    const teams = await prisma.taTeam.findMany({
+      where: {
+        clubId: actorClubId,
+        holdId: { in: missingTeamHoldIds },
+      },
+      select: {
+        id: true,
+        name: true,
+        league: true,
+        holdId: true,
+        seasonStartYear: true,
+        club: { select: { id: true, name: true, clubNo: true } },
+      },
+      orderBy: [{ seasonStartYear: "desc" }, { name: "asc" }],
+    });
+
+    const byHoldId = new Map<string, any>();
+    for (const t of teams) {
+      const hid = String(t.holdId ?? "").trim();
+      if (!hid) continue;
+      if (!byHoldId.has(hid)) {
+        byHoldId.set(hid, {
+          id: t.id,
+          name: t.name,
+          league: t.league,
+          club: t.club,
+        });
+      }
+    }
+
+    const enriched = (items ?? []).map((i: any) => {
+      if (i?.role !== "TEAM_LEADER" || i?.team || !i?.holdId) return i;
+      const team = byHoldId.get(String(i.holdId));
+      return team ? { ...i, team } : i;
+    });
+
+    return NextResponse.json({ ok: true, actorClubId, items: enriched });
+  }
 
   return NextResponse.json({ ok: true, actorClubId, items });
 }

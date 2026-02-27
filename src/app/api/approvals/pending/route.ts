@@ -49,6 +49,17 @@ export async function GET(req: Request) {
     ? [requestedClubId]
     : actorClubIds;
 
+  const scopedHoldIds = actor.isClubLeader && scopedClubIds.length
+    ? (
+        await prisma.taTeam.findMany({
+          where: { clubId: { in: scopedClubIds }, holdId: { not: null } },
+          select: { holdId: true },
+        })
+      )
+        .map((r) => String(r.holdId ?? "").trim())
+        .filter(Boolean)
+    : [];
+
   // Important: a user can have multiple approver roles (e.g. TOURNAMENT_ADMIN + CLUB_LEADER).
   // We must show the union of all approvable requests.
   const approvableRoles = getApprovableRoles(actor);
@@ -80,6 +91,18 @@ export async function GET(req: Request) {
           },
         },
         {
+          role: "TEAM_LEADER",
+          clubId: { in: scopedClubIds },
+        },
+        ...(scopedHoldIds.length
+          ? [
+              {
+                role: "TEAM_LEADER",
+                holdId: { in: scopedHoldIds },
+              },
+            ]
+          : []),
+        {
           role: "SECRETARIAT",
           clubId: { in: scopedClubIds },
         },
@@ -102,6 +125,16 @@ export async function GET(req: Request) {
       role: true,
       status: true,
       createdAt: true,
+      holdId: true,
+      clubLeaderTitle: true,
+      referee: {
+        select: {
+          id: true,
+          name: true,
+          refereeNo: true,
+          club: true,
+        },
+      },
       club: {
         select: {
           id: true,
@@ -134,6 +167,52 @@ export async function GET(req: Request) {
       },
     },
   });
+
+  const missingTeamHoldIds: string[] = Array.from(
+    new Set(
+      (items ?? [])
+        .filter((i: any) => i?.role === "TEAM_LEADER" && !i?.team && i?.holdId)
+        .map((i: any) => String(i.holdId))
+        .filter(Boolean)
+    )
+  );
+
+  if (missingTeamHoldIds.length) {
+    const teams = await prisma.taTeam.findMany({
+      where: { holdId: { in: missingTeamHoldIds }, clubId: { in: scopedClubIds } },
+      select: {
+        id: true,
+        name: true,
+        league: true,
+        holdId: true,
+        seasonStartYear: true,
+        club: { select: { id: true, name: true, clubNo: true } },
+      },
+      orderBy: [{ seasonStartYear: "desc" }, { name: "asc" }],
+    });
+
+    const byHoldId = new Map<string, any>();
+    for (const t of teams) {
+      const hid = String(t.holdId ?? "").trim();
+      if (!hid) continue;
+      if (!byHoldId.has(hid)) {
+        byHoldId.set(hid, {
+          id: t.id,
+          name: t.name,
+          league: t.league,
+          club: t.club,
+        });
+      }
+    }
+
+    const enriched = (items ?? []).map((i: any) => {
+      if (i?.role !== "TEAM_LEADER" || i?.team || !i?.holdId) return i;
+      const team = byHoldId.get(String(i.holdId));
+      return team ? { ...i, team } : i;
+    });
+
+    return NextResponse.json({ ok: true, items: enriched });
+  }
 
   return NextResponse.json({ ok: true, items });
 }

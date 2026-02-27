@@ -3,12 +3,17 @@ import { getCurrentUser } from "@/lib/auth";
 import TurneringKampeImportClient from "@/app/(app)/turnering/TurneringKampeImportClient";
 import TurneringGodkendClient from "./TurneringGodkendClient";
 import TurneringAuditClient from "./TurneringAuditClient";
+import TurneringSpillerlicenserClient from "./TurneringSpillerlicenserClient";
+import TurneringSpillestederClient from "./TurneringSpillestederClient";
+import TurneringTabsClient from "./TurneringTabsClient";
+import ClubLeadersManagementClient from "@/components/ta/ClubLeadersManagementClient";
 import {
   normalizeStagedClubs,
   normalizeStagedMatches,
   normalizeStagedTeams,
 } from "@/lib/turnering/staged";
 import { prisma } from "@/lib/prisma";
+import { ensureTurneringDomainTables } from "@/lib/turnering/db";
 
 const tabs = [
   { key: "godkend", label: "Godkend" },
@@ -16,6 +21,9 @@ const tabs = [
   { key: "kampe", label: "Kampe" },
   { key: "klubber", label: "Klubber" },
   { key: "hold", label: "Hold" },
+  { key: "klubledere", label: "Klubledere" },
+  { key: "spillerlicenser", label: "Spillerlicenser" },
+  { key: "spillesteder", label: "Spillesteder" },
   { key: "audit", label: "Audit (mangler)" },
 ] as const;
 
@@ -34,7 +42,10 @@ export default async function TurneringPage({
   const tabRaw = String(sp?.tab ?? "godkend");
   const tab: TabKey = (tabs.some((t) => t.key === tabRaw) ? tabRaw : "godkend") as TabKey;
 
-  const latestImport = tab === "godkend" ? null : await getLatestImport();
+  const latestImport =
+    tab === "godkend" || tab === "spillerlicenser" || tab === "spillesteder" || tab === "klubledere"
+      ? null
+      : await getLatestImport();
   const staged = latestImport
     ? {
         clubs: normalizeStagedClubs(latestImport.klubliste),
@@ -42,6 +53,15 @@ export default async function TurneringPage({
         matches: normalizeStagedMatches(latestImport.kampe),
       }
     : null;
+
+  let clubsForLicenses: Array<{ id: string; name: string; clubNo: string | null }> | null = null;
+  if (tab === "spillerlicenser") {
+    await ensureTurneringDomainTables();
+    clubsForLicenses = await prisma.taClub.findMany({
+      select: { id: true, name: true, clubNo: true },
+      orderBy: [{ name: "asc" }],
+    });
+  }
 
   return (
     <div className="mx-auto w-full max-w-6xl">
@@ -53,25 +73,7 @@ export default async function TurneringPage({
       </div>
 
       <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
-        <div className="flex flex-wrap gap-2">
-          {tabs.map((t) => {
-            const active = t.key === tab;
-            return (
-              <a
-                key={t.key}
-                href={`/turnering?tab=${t.key}`}
-                className={
-                  "rounded-lg px-3 py-2 text-sm font-semibold " +
-                  (active
-                    ? "bg-[color:var(--brand)] text-[var(--brand-foreground)]"
-                    : "bg-zinc-200 text-zinc-800 hover:bg-zinc-300")
-                }
-              >
-                {t.label}
-              </a>
-            );
-          })}
-        </div>
+        <TurneringTabsClient tabs={tabs as unknown as Array<{ key: string; label: string }>} activeTab={tab} />
 
         <div className="mt-4 rounded-lg border border-zinc-200 bg-white p-4 text-sm text-zinc-700">
           {tab === "godkend" ? (
@@ -155,6 +157,24 @@ export default async function TurneringPage({
                   />
                 </div>
               )}
+            </div>
+          ) : null}
+
+          {tab === "spillerlicenser" ? (
+            <div>
+              <TurneringSpillerlicenserClient clubs={clubsForLicenses ?? []} />
+            </div>
+          ) : null}
+
+          {tab === "klubledere" ? (
+            <div>
+              <ClubLeadersManagementClient />
+            </div>
+          ) : null}
+
+          {tab === "spillesteder" ? (
+            <div>
+              <TurneringSpillestederClient />
             </div>
           ) : null}
 
